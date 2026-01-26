@@ -113,6 +113,7 @@ const formatNumber = (val, decimals = 1) => {
     return val.toFixed(decimals);
 };
 
+// Util pentru a crea date locale corecte (fara UTC shift)
 const formatDateISO = (date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -126,11 +127,16 @@ const extractNumericValue = (columnValue) => {
     if (!columnValue) return 0;
     
     let valStr = "";
+    
+    // 1. Încercăm valoarea brută din JSON (cea mai sigură)
     if (columnValue.value) {
         try {
             const parsed = JSON.parse(columnValue.value);
+            // Caz direct numeric
             if (typeof parsed === 'number') return parsed;
+            // Caz Formula Result
             if (parsed.formula_result !== undefined) return Number(parsed.formula_result);
+            // Caz standard
             if (parsed && parsed.value !== undefined) {
                 if (typeof parsed.value === 'number') return parsed.value;
                 valStr = String(parsed.value);
@@ -138,16 +144,24 @@ const extractNumericValue = (columnValue) => {
         } catch(e) {}
     }
 
+    // 2. Fallback la text
     if (!valStr) {
         if (columnValue.display_value) valStr = String(columnValue.display_value);
         else if (columnValue.text) valStr = columnValue.text;
     }
 
-    if (!valStr) return 0;
+    if (!valStr || valStr === "null") return 0;
 
+    // Gestionare numere negative în paranteză (ex: "(100)")
+    if (valStr.includes('(') && valStr.includes(')')) {
+        valStr = '-' + valStr.replace(/[()]/g, '');
+    }
+
+    // Curățare
     let clean = valStr.replace(/[^0-9.,-]/g, '');
     if (!clean) return 0;
 
+    // Detectare format
     if (clean.includes('.') && clean.includes(',')) {
         if (clean.indexOf('.') < clean.indexOf(',')) {
             clean = clean.replace(/\./g, '').replace(',', '.');
@@ -162,6 +176,7 @@ const extractNumericValue = (columnValue) => {
     return isNaN(n) ? 0 : n;
 };
 
+// FIX CRITIC: Returnăm string-uri pentru comparație sigură
 const getPersonIds = (columnValue) => {
     if (!columnValue?.value) return [];
     try {
@@ -217,20 +232,27 @@ const OperationalRowCells = ({ row, showSalesMetrics = false }) => {
 
             <td className="px-2 py-2 text-center text-slate-700 font-medium border-r">{safeVal(row.suppliersAdded)}</td>
             
+            {/* DATA CONTRACT */}
             <td className="px-2 py-2 text-center bg-blue-50/30 text-slate-700">{safeVal(row.ctr_principalCount)}</td>
             <td className="px-2 py-2 text-center bg-blue-50/30">{formatCurrency(safeVal(row.ctr_principalProfitEur))}</td> 
             <td className="px-2 py-2 text-center text-slate-600">{safeVal(row.ctr_secondaryCount)}</td>
             <td className="px-2 py-2 text-center text-slate-600">{formatCurrency(safeVal(row.ctr_secondaryProfitEur))}</td>
-            <td className="px-2 py-2 text-center font-bold bg-blue-100/50">{formatCurrency(totalProfitEurCtr)}</td>
-            <td className="px-2 py-2 text-center text-slate-600 bg-blue-50/30">{formatCurrency(target)}</td>
-            <td className="px-2 py-2 text-center font-bold text-green-700 bg-blue-100/50 border-r">{formatCurrency(bonus)}</td>
+            <td className="px-2 py-2 text-center font-bold bg-blue-100/50">{safeVal(totalCountCtr)}</td>
+            <td className="px-2 py-2 text-center font-bold bg-blue-100/50 border-r">{formatCurrency(totalProfitEurCtr)}</td>
             
+            {/* DATA LIVRARE */}
             <td className="px-2 py-2 text-center bg-green-50/30 text-slate-700">{safeVal(row.livr_principalCount)}</td>
             <td className="px-2 py-2 text-center bg-green-50/30">{formatCurrency(safeVal(row.livr_principalProfitEur))}</td>
             <td className="px-2 py-2 text-center text-slate-600">{safeVal(row.livr_secondaryCount)}</td>
             <td className="px-2 py-2 text-center text-slate-600">{formatCurrency(safeVal(row.livr_secondaryProfitEur))}</td>
+            <td className="px-2 py-2 text-center font-bold bg-green-100/50">{safeVal(totalCountLivr)}</td>
             <td className="px-2 py-2 text-center font-bold bg-green-100/50 border-r">{formatCurrency(totalProfitEurLivr)}</td>
 
+            {/* TARGET & BONUS (MOVED AFTER LIVRARE) */}
+            <td className="px-2 py-2 text-center text-slate-600 bg-blue-50/30">{formatCurrency(target)}</td>
+            <td className="px-2 py-2 text-center font-bold text-green-700 bg-blue-100/50 border-r">{formatCurrency(bonus)}</td>
+
+            {/* ALTELE */}
             {/* <td className="px-2 py-2 text-center text-xs text-slate-500">{formatCurrency(safeVal(row.profitRonRaw))}</td> */}
             <td className="px-2 py-2 text-center font-bold text-blue-800 bg-blue-50/50 border-l border-r border-blue-100">
                 {formatNumber(avgProfitability)}%
@@ -251,6 +273,188 @@ const OperationalRowCells = ({ row, showSalesMetrics = false }) => {
     );
 };
 
+const TableFooter = ({ data, showSalesMetrics }) => {
+    // Calcul Totaluri si Medii
+    const totals = data.reduce((acc, row) => {
+        // Sales
+        acc.contactat += safeVal(row.contactat);
+        acc.calificat += safeVal(row.calificat);
+        acc.emailsCount += safeVal(row.emailsCount);
+        acc.callsCount += safeVal(row.callsCount);
+        // Common
+        acc.suppliersAdded += safeVal(row.suppliersAdded);
+        
+        // Contract
+        acc.ctr_principalCount += safeVal(row.ctr_principalCount);
+        acc.ctr_principalProfitEur += safeVal(row.ctr_principalProfitEur);
+        acc.ctr_secondaryCount += safeVal(row.ctr_secondaryCount);
+        acc.ctr_secondaryProfitEur += safeVal(row.ctr_secondaryProfitEur);
+        
+        // Livrare
+        acc.livr_principalCount += safeVal(row.livr_principalCount);
+        acc.livr_principalProfitEur += safeVal(row.livr_principalProfitEur);
+        acc.livr_secondaryCount += safeVal(row.livr_secondaryCount);
+        acc.livr_secondaryProfitEur += safeVal(row.livr_secondaryProfitEur);
+        
+        // Web
+        acc.websiteCount += safeVal(row.websiteCount);
+        acc.websiteProfit += safeVal(row.websiteProfit);
+        acc.solicitariCount += safeVal(row.solicitariCount);
+        
+        // Financials (Sum for averages)
+        acc.sumClientTerms += safeVal(row.sumClientTerms);
+        acc.countClientTerms += safeVal(row.countClientTerms);
+        acc.sumSupplierTerms += safeVal(row.sumSupplierTerms);
+        acc.countSupplierTerms += safeVal(row.countSupplierTerms);
+        acc.overdueInvoicesCount += safeVal(row.overdueInvoicesCount);
+        
+        acc.sumProfitability += safeVal(row.sumProfitability);
+        acc.countProfitability += safeVal(row.countProfitability);
+        
+        acc.supplierTermsUnder30 += safeVal(row.supplierTermsUnder30);
+        acc.supplierTermsOver30 += safeVal(row.supplierTermsOver30);
+        
+        return acc;
+    }, {
+        contactat: 0, calificat: 0, emailsCount: 0, callsCount: 0,
+        suppliersAdded: 0,
+        ctr_principalCount: 0, ctr_principalProfitEur: 0, ctr_secondaryCount: 0, ctr_secondaryProfitEur: 0,
+        livr_principalCount: 0, livr_principalProfitEur: 0, livr_secondaryCount: 0, livr_secondaryProfitEur: 0,
+        websiteCount: 0, websiteProfit: 0, solicitariCount: 0,
+        sumClientTerms: 0, countClientTerms: 0,
+        sumSupplierTerms: 0, countSupplierTerms: 0,
+        overdueInvoicesCount: 0,
+        supplierTermsUnder30: 0, supplierTermsOver30: 0,
+        sumProfitability: 0, countProfitability: 0
+    });
+
+    const count = data.length || 1;
+
+    // Derived Totals
+    const totalCtrCount = totals.ctr_principalCount + totals.ctr_secondaryCount;
+    const totalCtrProfit = totals.ctr_principalProfitEur + totals.ctr_secondaryProfitEur;
+    const totalLivrCount = totals.livr_principalCount + totals.livr_secondaryCount;
+    const totalLivrProfit = totals.livr_principalProfitEur + totals.livr_secondaryProfitEur;
+    
+    // Derived Averages (Global)
+    const avgProfitability = totals.countProfitability > 0 ? totals.sumProfitability / totals.countProfitability : 0;
+    const avgClientTerm = totals.countClientTerms > 0 ? totals.sumClientTerms / totals.countClientTerms : 0;
+    const avgSupplierTerm = totals.countSupplierTerms > 0 ? totals.sumSupplierTerms / totals.countSupplierTerms : 0;
+    
+    // Derived Rates
+    const totalLeads = totals.calificat + totals.contactat;
+    const rateConvClients = totalLeads > 0 ? (totals.calificat / totalLeads) * 100 : 0;
+    const rateConvWeb = totals.solicitariCount > 0 ? (totals.websiteCount / totals.solicitariCount) * 100 : 0;
+
+    // Helper for Average Row (divide by count)
+    const avg = (val) => val / count;
+
+    // Target (0 always) and Bonus (Total Profit Contract - 0)
+    const targetTotal = 0;
+    const bonusTotal = totalCtrProfit - targetTotal;
+    const bonusAvg = bonusTotal / count;
+
+    return (
+        <tfoot className="bg-gray-100 border-t-2 border-gray-300 font-bold text-gray-800">
+            {/* ROW 1: TOTAL */}
+            <tr>
+                <td className="px-3 py-2 text-left bg-gray-200">TOTAL</td>
+                {showSalesMetrics && (
+                    <>
+                        <td className="px-2 py-2 text-center">{totals.contactat}</td>
+                        <td className="px-2 py-2 text-center">{totals.calificat}</td>
+                        <td className="px-2 py-2 text-center">{formatNumber(rateConvClients)}%</td>
+                        <td className="px-2 py-2 text-center">{totals.emailsCount}</td>
+                        <td className="px-2 py-2 text-center border-r">{totals.callsCount}</td>
+                    </>
+                )}
+                <td className="px-2 py-2 text-center border-r">{totals.suppliersAdded}</td>
+                
+                {/* Contract */}
+                <td className="px-2 py-2 text-center">{totals.ctr_principalCount}</td>
+                <td className="px-2 py-2 text-center">{formatCurrency(totals.ctr_principalProfitEur)}</td>
+                <td className="px-2 py-2 text-center">{totals.ctr_secondaryCount}</td>
+                <td className="px-2 py-2 text-center">{formatCurrency(totals.ctr_secondaryProfitEur)}</td>
+                <td className="px-2 py-2 text-center">{totalCtrCount}</td>
+                <td className="px-2 py-2 text-center border-r">{formatCurrency(totalCtrProfit)}</td>
+
+                {/* Livrare */}
+                <td className="px-2 py-2 text-center">{totals.livr_principalCount}</td>
+                <td className="px-2 py-2 text-center">{formatCurrency(totals.livr_principalProfitEur)}</td>
+                <td className="px-2 py-2 text-center">{totals.livr_secondaryCount}</td>
+                <td className="px-2 py-2 text-center">{formatCurrency(totals.livr_secondaryProfitEur)}</td>
+                <td className="px-2 py-2 text-center">{totalLivrCount}</td>
+                <td className="px-2 py-2 text-center border-r">{formatCurrency(totalLivrProfit)}</td>
+
+                {/* Target & Bonus */}
+                <td className="px-2 py-2 text-center">{formatCurrency(targetTotal)}</td>
+                <td className="px-2 py-2 text-center border-r text-green-700">{formatCurrency(bonusTotal)}</td>
+
+                {/* Other */}
+                <td className="px-2 py-2 text-center border-l border-r">{formatNumber(avgProfitability)}%</td>
+                <td className="px-2 py-2 text-center">{totals.websiteCount}</td>
+                <td className="px-2 py-2 text-center">{formatCurrency(totals.websiteProfit)}</td>
+                <td className="px-2 py-2 text-center">{totals.solicitariCount}</td>
+                <td className="px-2 py-2 text-center">{formatNumber(rateConvWeb)}%</td>
+                
+                <td className="px-2 py-2 text-center">{formatNumber(avgClientTerm)}</td>
+                <td className="px-2 py-2 text-center">{formatNumber(avgSupplierTerm)}</td>
+                <td className="px-2 py-2 text-center text-red-600">{totals.overdueInvoicesCount}</td>
+                <td className="px-2 py-2 text-center">{totals.supplierTermsUnder30}</td>
+                <td className="px-2 py-2 text-center">{totals.supplierTermsOver30}</td>
+            </tr>
+
+            {/* ROW 2: MEDIA */}
+            <tr className="text-gray-600 italic">
+                <td className="px-3 py-2 text-left bg-gray-200">MEDIA</td>
+                {showSalesMetrics && (
+                    <>
+                        <td className="px-2 py-2 text-center">{formatNumber(avg(totals.contactat))}</td>
+                        <td className="px-2 py-2 text-center">{formatNumber(avg(totals.calificat))}</td>
+                        <td className="px-2 py-2 text-center">-</td>
+                        <td className="px-2 py-2 text-center">{formatNumber(avg(totals.emailsCount))}</td>
+                        <td className="px-2 py-2 text-center border-r">{formatNumber(avg(totals.callsCount))}</td>
+                    </>
+                )}
+                <td className="px-2 py-2 text-center border-r">{formatNumber(avg(totals.suppliersAdded))}</td>
+                
+                {/* Contract */}
+                <td className="px-2 py-2 text-center">{formatNumber(avg(totals.ctr_principalCount))}</td>
+                <td className="px-2 py-2 text-center">{formatCurrency(avg(totals.ctr_principalProfitEur))}</td>
+                <td className="px-2 py-2 text-center">{formatNumber(avg(totals.ctr_secondaryCount))}</td>
+                <td className="px-2 py-2 text-center">{formatCurrency(avg(totals.ctr_secondaryProfitEur))}</td>
+                <td className="px-2 py-2 text-center">{formatNumber(avg(totalCtrCount))}</td>
+                <td className="px-2 py-2 text-center border-r">{formatCurrency(avg(totalCtrProfit))}</td>
+
+                {/* Livrare */}
+                <td className="px-2 py-2 text-center">{formatNumber(avg(totals.livr_principalCount))}</td>
+                <td className="px-2 py-2 text-center">{formatCurrency(avg(totals.livr_principalProfitEur))}</td>
+                <td className="px-2 py-2 text-center">{formatNumber(avg(totals.livr_secondaryCount))}</td>
+                <td className="px-2 py-2 text-center">{formatCurrency(avg(totals.livr_secondaryProfitEur))}</td>
+                <td className="px-2 py-2 text-center">{formatNumber(avg(totalLivrCount))}</td>
+                <td className="px-2 py-2 text-center border-r">{formatCurrency(avg(totalLivrProfit))}</td>
+
+                {/* Target & Bonus */}
+                <td className="px-2 py-2 text-center">{formatCurrency(0)}</td>
+                <td className="px-2 py-2 text-center border-r text-green-700">{formatCurrency(bonusAvg)}</td>
+
+                {/* Other */}
+                <td className="px-2 py-2 text-center border-l border-r">-</td>
+                <td className="px-2 py-2 text-center">{formatNumber(avg(totals.websiteCount))}</td>
+                <td className="px-2 py-2 text-center">{formatCurrency(avg(totals.websiteProfit))}</td>
+                <td className="px-2 py-2 text-center">{formatNumber(avg(totals.solicitariCount))}</td>
+                <td className="px-2 py-2 text-center">-</td>
+                
+                <td className="px-2 py-2 text-center">-</td>
+                <td className="px-2 py-2 text-center">-</td>
+                <td className="px-2 py-2 text-center">{formatNumber(avg(totals.overdueInvoicesCount))}</td>
+                <td className="px-2 py-2 text-center">{formatNumber(avg(totals.supplierTermsUnder30))}</td>
+                <td className="px-2 py-2 text-center">{formatNumber(avg(totals.supplierTermsOver30))}</td>
+            </tr>
+        </tfoot>
+    );
+};
+
 const TableHeader = ({ showSalesMetrics }) => (
     <thead className="text-[10px] uppercase bg-slate-100 border-b border-slate-200 text-slate-600">
         <tr>
@@ -268,13 +472,16 @@ const TableHeader = ({ showSalesMetrics }) => (
 
             <th className="px-2 py-3 text-center border-r">Furnizori</th>
 
-            <th colSpan={7} className="px-2 py-2 text-center bg-blue-50 border-b border-blue-200 border-r text-blue-800 font-bold">
+            <th colSpan={6} className="px-2 py-2 text-center bg-blue-50 border-b border-blue-200 border-r text-blue-800 font-bold">
                 După Data Contract
             </th>
             
-            <th colSpan={5} className="px-2 py-2 text-center bg-green-50 border-b border-green-200 border-r text-green-800 font-bold">
+            <th colSpan={6} className="px-2 py-2 text-center bg-green-50 border-b border-green-200 border-r text-green-800 font-bold">
                 După Data Livrare
             </th>
+
+            <th className="px-2 py-3 text-center bg-blue-50/30 text-blue-900 border-b border-blue-200">Target</th>
+            <th className="px-2 py-3 text-center bg-blue-100/50 text-green-800 border-b border-blue-200 border-r">Bonus</th>
 
             {/* <th className="px-2 py-3 text-center">Profit RON<br/>(Brut)</th> */}
             <th className="px-2 py-3 text-center bg-blue-50 text-blue-800">Profitabilitate<br/>%</th>
@@ -297,15 +504,18 @@ const TableHeader = ({ showSalesMetrics }) => (
             <th className="px-1 py-2 text-center bg-blue-50/30">Profit Pr.</th>
             <th className="px-1 py-2 text-center">Curse Sec.</th>
             <th className="px-1 py-2 text-center">Profit Sec.</th>
-            <th className="px-1 py-2 text-center bg-blue-100/50 font-bold">TOTAL</th>
-            <th className="px-1 py-2 text-center bg-blue-50/30">Target</th>
-            <th className="px-1 py-2 text-center bg-blue-100/50 border-r font-bold text-green-700">Bonus</th>
+            <th className="px-1 py-2 text-center bg-blue-100/50 font-bold">Total Curse</th>
+            <th className="px-1 py-2 text-center bg-blue-100/50 border-r font-bold">Total Profit</th>
 
             <th className="px-1 py-2 text-center bg-green-50/30">Curse Pr.</th>
             <th className="px-1 py-2 text-center bg-green-50/30">Profit Pr.</th>
             <th className="px-1 py-2 text-center">Curse Sec.</th>
             <th className="px-1 py-2 text-center">Profit Sec.</th>
-            <th className="px-1 py-2 text-center bg-green-100/50 border-r font-bold">TOTAL</th>
+            <th className="px-1 py-2 text-center bg-green-100/50 font-bold">Total Curse</th>
+            <th className="px-1 py-2 text-center bg-green-100/50 border-r font-bold">Total Profit</th>
+
+            <th className="bg-blue-50/30"></th>
+            <th className="bg-blue-100/50 border-r"></th>
 
             <th colSpan={11}></th>
         </tr>
@@ -330,12 +540,13 @@ const OperationalTable = ({ data, dateRange }) => {
                     ))}
                     {data.length === 0 && (
                         <tr>
-                            <td colSpan={28} className="px-4 py-8 text-center text-slate-500">
+                            <td colSpan={30} className="px-4 py-8 text-center text-slate-500">
                                 Nu există date disponibile pentru perioada selectată.
                             </td>
                         </tr>
                     )}
                 </tbody>
+                {data.length > 0 && <TableFooter data={data} showSalesMetrics={false} />}
             </table>
         </div>
     );
@@ -360,12 +571,13 @@ const ManagementTable = ({ data, dateRange }) => {
                     ))}
                     {data.length === 0 && (
                         <tr>
-                            <td colSpan={28} className="px-4 py-8 text-center text-slate-500">
+                            <td colSpan={30} className="px-4 py-8 text-center text-slate-500">
                                 Nu există date disponibile pentru perioada selectată.
                             </td>
                         </tr>
                     )}
                 </tbody>
+                {data.length > 0 && <TableFooter data={data} showSalesMetrics={false} />}
             </table>
         </div>
     );
@@ -390,12 +602,13 @@ const SalesTable = ({ data, dateRange }) => {
                     ))}
                      {data.length === 0 && (
                         <tr>
-                            <td colSpan={31} className="px-4 py-8 text-center text-slate-500">
+                            <td colSpan={33} className="px-4 py-8 text-center text-slate-500">
                                 Nu există date disponibile pentru perioada selectată.
                             </td>
                         </tr>
                     )}
                 </tbody>
+                {data.length > 0 && <TableFooter data={data} showSalesMetrics={true} />}
             </table>
         </div>
     );
@@ -498,6 +711,7 @@ export default function App() {
                     .text-red { color: red; font-weight: bold; }
                     .text-green { color: green; font-weight: bold; }
                     h2 { font-size: 14pt; margin-top: 20px; }
+                    tfoot { font-weight: bold; background-color: #f9fafb; border-top: 2px solid #ccc; }
                 </style>
             </head>
             <body>
@@ -509,7 +723,7 @@ export default function App() {
         `;
 
         const renderTableRows = (stats, isSales) => {
-            return stats.map(row => {
+            const bodyRows = stats.map(row => {
                  const totalCountCtr = (row.ctr_principalCount || 0) + (row.ctr_secondaryCount || 0);
                  const totalProfitEurCtr = (row.ctr_principalProfitEur || 0) + (row.ctr_secondaryProfitEur || 0);
                  const totalCountLivr = (row.livr_principalCount || 0) + (row.livr_secondaryCount || 0);
@@ -539,13 +753,16 @@ export default function App() {
                     
                     <td class="bg-blue">${safeVal(row.ctr_principalCount)}</td><td class="bg-blue">${formatCurrency(safeVal(row.ctr_principalProfitEur))}</td>
                     <td>${safeVal(row.ctr_secondaryCount)}</td><td>${formatCurrency(safeVal(row.ctr_secondaryProfitEur))}</td>
-                    <td class="bg-blue bold">${formatCurrency(totalProfitEurCtr)}</td>
-                    <td class="bg-blue">${formatCurrency(target)}</td>
-                    <td class="bg-blue bold text-green">${formatCurrency(bonus)}</td>
+                    <td class="bg-blue bold">${safeVal(totalCountCtr)}</td>
+                    <td class="bg-blue bold text-r border-r">${formatCurrency(totalProfitEurCtr)}</td>
 
                     <td class="bg-green">${safeVal(row.livr_principalCount)}</td><td class="bg-green">${formatCurrency(safeVal(row.livr_principalProfitEur))}</td>
                     <td>${safeVal(row.livr_secondaryCount)}</td><td>${formatCurrency(safeVal(row.livr_secondaryProfitEur))}</td>
-                    <td class="bg-green bold">${formatCurrency(totalProfitEurLivr)}</td>
+                    <td class="bg-green bold">${safeVal(totalCountLivr)}</td>
+                    <td class="bg-green bold border-r">${formatCurrency(totalProfitEurLivr)}</td>
+
+                    <td class="bg-blue">${formatCurrency(target)}</td>
+                    <td class="bg-blue bold text-green border-r">${formatCurrency(bonus)}</td>
 
                     {/* PROFIT RON RAW REMOVED FROM EXPORT AS WELL */}
                     <td class="bold bg-blue" style="background-color: #e3f2fd;">${avgProfitability}%</td>
@@ -558,6 +775,137 @@ export default function App() {
                     <td class="bg-orange">${row.supplierTermsUnder30}</td><td class="bg-orange">${row.supplierTermsOver30}</td>
                  </tr>`;
             }).join('');
+            
+            // CALCULATE FOOTER FOR EXPORT
+             const totals = stats.reduce((acc, row) => {
+                // Sales
+                acc.contactat += safeVal(row.contactat);
+                acc.calificat += safeVal(row.calificat);
+                acc.emailsCount += safeVal(row.emailsCount);
+                acc.callsCount += safeVal(row.callsCount);
+                // Common
+                acc.suppliersAdded += safeVal(row.suppliersAdded);
+                
+                // Contract
+                acc.ctr_principalCount += safeVal(row.ctr_principalCount);
+                acc.ctr_principalProfitEur += safeVal(row.ctr_principalProfitEur);
+                acc.ctr_secondaryCount += safeVal(row.ctr_secondaryCount);
+                acc.ctr_secondaryProfitEur += safeVal(row.ctr_secondaryProfitEur);
+                
+                // Livrare
+                acc.livr_principalCount += safeVal(row.livr_principalCount);
+                acc.livr_principalProfitEur += safeVal(row.livr_principalProfitEur);
+                acc.livr_secondaryCount += safeVal(row.livr_secondaryCount);
+                acc.livr_secondaryProfitEur += safeVal(row.livr_secondaryProfitEur);
+                
+                // Web
+                acc.websiteCount += safeVal(row.websiteCount);
+                acc.websiteProfit += safeVal(row.websiteProfit);
+                acc.solicitariCount += safeVal(row.solicitariCount);
+                
+                // Financials (Sum for averages)
+                acc.sumClientTerms += safeVal(row.sumClientTerms);
+                acc.countClientTerms += safeVal(row.countClientTerms);
+                acc.sumSupplierTerms += safeVal(row.sumSupplierTerms);
+                acc.countSupplierTerms += safeVal(row.countSupplierTerms);
+                acc.overdueInvoicesCount += safeVal(row.overdueInvoicesCount);
+                
+                acc.sumProfitability += safeVal(row.sumProfitability);
+                acc.countProfitability += safeVal(row.countProfitability);
+                
+                acc.supplierTermsUnder30 += safeVal(row.supplierTermsUnder30);
+                acc.supplierTermsOver30 += safeVal(row.supplierTermsOver30);
+                
+                return acc;
+            }, {
+                contactat: 0, calificat: 0, emailsCount: 0, callsCount: 0,
+                suppliersAdded: 0,
+                ctr_principalCount: 0, ctr_principalProfitEur: 0, ctr_secondaryCount: 0, ctr_secondaryProfitEur: 0,
+                livr_principalCount: 0, livr_principalProfitEur: 0, livr_secondaryCount: 0, livr_secondaryProfitEur: 0,
+                websiteCount: 0, websiteProfit: 0, solicitariCount: 0,
+                sumClientTerms: 0, countClientTerms: 0,
+                sumSupplierTerms: 0, countSupplierTerms: 0,
+                overdueInvoicesCount: 0,
+                supplierTermsUnder30: 0, supplierTermsOver30: 0,
+                sumProfitability: 0, countProfitability: 0
+            });
+            
+            const count = stats.length || 1;
+            const totalCtrCount = totals.ctr_principalCount + totals.ctr_secondaryCount;
+            const totalCtrProfit = totals.ctr_principalProfitEur + totals.ctr_secondaryProfitEur;
+            const totalLivrCount = totals.livr_principalCount + totals.livr_secondaryCount;
+            const totalLivrProfit = totals.livr_principalProfitEur + totals.livr_secondaryProfitEur;
+            const avgProfitability = totals.countProfitability > 0 ? totals.sumProfitability / totals.countProfitability : 0;
+            const avgClientTerm = totals.countClientTerms > 0 ? totals.sumClientTerms / totals.countClientTerms : 0;
+            const avgSupplierTerm = totals.countSupplierTerms > 0 ? totals.sumSupplierTerms / totals.countSupplierTerms : 0;
+            const totalLeads = totals.calificat + totals.contactat;
+            const rateConvClients = totalLeads > 0 ? (totals.calificat / totalLeads) * 100 : 0;
+            const rateConvWeb = totals.solicitariCount > 0 ? (totals.websiteCount / totals.solicitariCount) * 100 : 0;
+            const avg = (val) => val / count;
+
+            // Target (0 always) and Bonus (Total Profit Contract - 0)
+            const targetTotal = 0;
+            const bonusTotal = totalCtrProfit - targetTotal;
+            const bonusAvg = bonusTotal / count;
+
+            let footerSales1 = '';
+            let footerSales2 = '';
+
+            if (isSales) {
+                footerSales1 = `<td class="text-center">${totals.contactat}</td><td class="text-center">${totals.calificat}</td><td class="text-center">${formatNumber(rateConvClients)}%</td><td class="text-center">${totals.emailsCount}</td><td class="text-center">${totals.callsCount}</td>`;
+                footerSales2 = `<td class="text-center">${formatNumber(avg(totals.contactat))}</td><td class="text-center">${formatNumber(avg(totals.calificat))}</td><td class="text-center">-</td><td class="text-center">${formatNumber(avg(totals.emailsCount))}</td><td class="text-center">${formatNumber(avg(totals.callsCount))}</td>`;
+            }
+
+            const footer = `
+                <tr style="background-color: #e5e7eb; font-weight: bold;">
+                    <td>TOTAL</td>
+                    ${footerSales1}
+                    <td>${totals.suppliersAdded}</td>
+                    <td>${totals.ctr_principalCount}</td><td>${formatCurrency(totals.ctr_principalProfitEur)}</td>
+                    <td>${totals.ctr_secondaryCount}</td><td>${formatCurrency(totals.ctr_secondaryProfitEur)}</td>
+                    <td>${totalCtrCount}</td><td>${formatCurrency(totalCtrProfit)}</td>
+                    
+                    <td>${totals.livr_principalCount}</td><td>${formatCurrency(totals.livr_principalProfitEur)}</td>
+                    <td>${totals.livr_secondaryCount}</td><td>${formatCurrency(totals.livr_secondaryProfitEur)}</td>
+                    <td>${totalLivrCount}</td><td>${formatCurrency(totalLivrProfit)}</td>
+                    
+                    <td>${formatCurrency(targetTotal)}</td>
+                    <td>${formatCurrency(bonusTotal)}</td>
+
+                    <td>${formatNumber(avgProfitability)}%</td>
+                    <td>${totals.websiteCount}</td><td>${formatCurrency(totals.websiteProfit)}</td>
+                    <td>${totals.solicitariCount}</td><td>${formatNumber(rateConvWeb)}%</td>
+                    
+                    <td>${formatNumber(avgClientTerm)}</td><td>${formatNumber(avgSupplierTerm)}</td>
+                    <td>${totals.overdueInvoicesCount}</td>
+                    <td>${totals.supplierTermsUnder30}</td><td>${totals.supplierTermsOver30}</td>
+                </tr>
+                <tr style="background-color: #e5e7eb; font-style: italic;">
+                    <td>MEDIA</td>
+                    ${footerSales2}
+                    <td>${formatNumber(avg(totals.suppliersAdded))}</td>
+                    <td>${formatNumber(avg(totals.ctr_principalCount))}</td><td>${formatCurrency(avg(totals.ctr_principalProfitEur))}</td>
+                    <td>${formatNumber(avg(totals.ctr_secondaryCount))}</td><td>${formatCurrency(avg(totals.ctr_secondaryProfitEur))}</td>
+                    <td>${formatNumber(avg(totalCtrCount))}</td><td>${formatCurrency(avg(totalCtrProfit))}</td>
+                    
+                    <td>${formatNumber(avg(totals.livr_principalCount))}</td><td>${formatCurrency(avg(totals.livr_principalProfitEur))}</td>
+                    <td>${formatNumber(avg(totals.livr_secondaryCount))}</td><td>${formatCurrency(avg(totals.livr_secondaryProfitEur))}</td>
+                    <td>${formatNumber(avg(totalLivrCount))}</td><td>${formatCurrency(avg(totalLivrProfit))}</td>
+                    
+                    <td>${formatCurrency(0)}</td>
+                    <td>${formatCurrency(bonusAvg)}</td>
+
+                    <td>-</td>
+                    <td>${formatNumber(avg(totals.websiteCount))}</td><td>${formatCurrency(avg(totals.websiteProfit))}</td>
+                    <td>${formatNumber(avg(totals.solicitariCount))}</td><td>-</td>
+                    
+                    <td>-</td><td>-</td>
+                    <td>${formatNumber(avg(totals.overdueInvoicesCount))}</td>
+                    <td>${formatNumber(avg(totals.supplierTermsUnder30))}</td><td>${formatNumber(avg(totals.supplierTermsOver30))}</td>
+                </tr>
+            `;
+
+            return bodyRows + footer;
         };
 
         if (mgmtStats.length) {
@@ -568,9 +916,10 @@ export default function App() {
                     <tr>
                         <th rowspan="2">Angajat</th>
                         <th rowspan="2">Furnizori</th>
-                        <th colspan="7" class="bg-blue">După Data Contract</th>
-                        <th colspan="5" class="bg-green">După Data Livrare</th>
-                        
+                        <th colspan="6" class="bg-blue">După Data Contract</th>
+                        <th colspan="6" class="bg-green">După Data Livrare</th>
+                        <th rowspan="2" class="bg-blue">Target</th>
+                        <th rowspan="2" class="bg-blue">Bonus</th>
                         <th rowspan="2" class="bg-blue">Profitabilitate<br/>%</th>
                         <th rowspan="2">Curse<br/>Web</th>
                         <th rowspan="2">Profit<br/>Web</th>
@@ -583,9 +932,8 @@ export default function App() {
                         <th rowspan="2" class="bg-orange">Furn.<br/>>=30</th>
                     </tr>
                     <tr>
-                        <th class="bg-blue">Curse Pr.</th><th class="bg-blue">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-blue">TOTAL</th>
-                        <th class="bg-blue">Target</th><th class="bg-blue">Bonus</th>
-                        <th class="bg-green">Curse Pr.</th><th class="bg-green">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-green">TOTAL</th>
+                        <th class="bg-blue">Curse Pr.</th><th class="bg-blue">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-blue">Total Curse</th><th class="bg-blue">Total Profit</th>
+                        <th class="bg-green">Curse Pr.</th><th class="bg-green">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-green">Total Curse</th><th class="bg-green">Total Profit</th>
                     </tr>
                 </thead>
                 <tbody>${renderTableRows(mgmtStats, false)}</tbody></table>`;
@@ -598,9 +946,10 @@ export default function App() {
                     <tr>
                         <th rowspan="2">Angajat</th>
                         <th rowspan="2">Furnizori</th>
-                        <th colspan="7" class="bg-blue">După Data Contract</th>
-                        <th colspan="5" class="bg-green">După Data Livrare</th>
-                        
+                        <th colspan="6" class="bg-blue">După Data Contract</th>
+                        <th colspan="6" class="bg-green">După Data Livrare</th>
+                        <th rowspan="2" class="bg-blue">Target</th>
+                        <th rowspan="2" class="bg-blue">Bonus</th>
                         <th rowspan="2" class="bg-blue">Profitabilitate<br/>%</th>
                         <th rowspan="2">Curse<br/>Web</th>
                         <th rowspan="2">Profit<br/>Web</th>
@@ -613,9 +962,8 @@ export default function App() {
                         <th rowspan="2" class="bg-orange">Furn.<br/>>=30</th>
                     </tr>
                     <tr>
-                        <th class="bg-blue">Curse Pr.</th><th class="bg-blue">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-blue">TOTAL</th>
-                        <th class="bg-blue">Target</th><th class="bg-blue">Bonus</th>
-                        <th class="bg-green">Curse Pr.</th><th class="bg-green">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-green">TOTAL</th>
+                        <th class="bg-blue">Curse Pr.</th><th class="bg-blue">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-blue">Total Curse</th><th class="bg-blue">Total Profit</th>
+                        <th class="bg-green">Curse Pr.</th><th class="bg-green">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-green">Total Curse</th><th class="bg-green">Total Profit</th>
                     </tr>
                 </thead>
                 <tbody>${renderTableRows(opsStats, false)}</tbody></table>`;
@@ -633,9 +981,10 @@ export default function App() {
                         <th rowspan="2" class="bg-indigo">Email-uri</th>
                         <th rowspan="2" class="bg-indigo">Apeluri</th>
                         <th rowspan="2">Furnizori</th>
-                        <th colspan="7" class="bg-blue">După Data Contract</th>
-                        <th colspan="5" class="bg-green">După Data Livrare</th>
-                        
+                        <th colspan="6" class="bg-blue">După Data Contract</th>
+                        <th colspan="6" class="bg-green">După Data Livrare</th>
+                        <th rowspan="2" class="bg-blue">Target</th>
+                        <th rowspan="2" class="bg-blue">Bonus</th>
                         <th rowspan="2" class="bg-blue">Profitabilitate<br/>%</th>
                         <th rowspan="2">Curse<br/>Web</th>
                         <th rowspan="2">Profit<br/>Web</th>
@@ -648,9 +997,8 @@ export default function App() {
                         <th rowspan="2" class="bg-orange">Furn.<br/>>=30</th>
                     </tr>
                     <tr>
-                        <th class="bg-blue">Curse Pr.</th><th class="bg-blue">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-blue">TOTAL</th>
-                        <th class="bg-blue">Target</th><th class="bg-blue">Bonus</th>
-                        <th class="bg-green">Curse Pr.</th><th class="bg-green">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-green">TOTAL</th>
+                        <th class="bg-blue">Curse Pr.</th><th class="bg-blue">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-blue">Total Curse</th><th class="bg-blue">Total Profit</th>
+                        <th class="bg-green">Curse Pr.</th><th class="bg-green">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-green">Total Curse</th><th class="bg-green">Total Profit</th>
                     </tr>
                 </thead>
                 <tbody>${renderTableRows(salesStats, true)}</tbody></table>`;
