@@ -10,7 +10,8 @@ import {
   ExternalLink,
   Bug,
   Activity,
-  Search
+  Search,
+  Building
 } from 'lucide-react';
 
 // --- CONFIGURARE ---
@@ -43,7 +44,16 @@ const COLS = {
         TERMEN_PLATA_FURNIZOR: "numeric_mksev08g",
         DATA_SCADENTA_CLIENT: "date_mkyhsbh4",
         STATUS_PLATA_CLIENT: "color_mkv5g682",
-        PROFITABILITATE: "formula_mkxwd14p"
+        PROFITABILITATE: "formula_mkxwd14p",
+        
+        // --- COLOANE NOI (Vor fi detectate dinamic daca ID-ul nu e corect) ---
+        CRT: "crt_column_id", 
+        DEP: "dep_column_id", 
+        IMPLICARE: "implicare_column_id", 
+        CLIENT_FURNIZOR_PE: "client_furnizor_pe_column_id", 
+        MOD_TRANSPORT: "mod_transport_column_id", 
+        TIP_MARFA: "tip_marfa_column_id", 
+        OCUPARE: "ocupare_mij_transport_column_id"
     },
     FURNIZORI: {
         DATA: "date4", 
@@ -70,9 +80,9 @@ const DEPARTMENTS = {
     management: {
         name: "Management",
         employees: [
-            { id: 301, name: "Alin Lita", mondayUserId: 73962695 },    // Mutat de la Ops
-            { id: 302, name: "Bogdan Serafim", mondayUserId: 73962698 }, // Mutat de la Ops
-            { id: 303, name: "Rafael Onișoară", mondayUserId: 73046209 } // Nou adaugat
+            { id: 301, name: "Alin Lita", mondayUserId: 73962695 },    
+            { id: 302, name: "Bogdan Serafim", mondayUserId: 73962698 }, 
+            { id: 303, name: "Rafael Onișoară", mondayUserId: 73046209 } 
         ]
     },
     sales: {
@@ -91,7 +101,6 @@ const DEPARTMENTS = {
     operational: {
         name: "Operațiuni",
         employees: [
-            // Alin si Bogdan mutati la Management
             { id: 103, name: "David Popescu", mondayUserId: 74695692 },
             { id: 104, name: "Roberto Coica", mondayUserId: 74668675 },
             { id: 105, name: "Dumitru Ionut", mondayUserId: 74668676 },
@@ -187,6 +196,8 @@ const getPersonIds = (columnValue) => {
     }
 };
 
+// --- COMPONENTE UI ---
+
 const OperationalRowCells = ({ row, showSalesMetrics = false }) => {
     const totalCountCtr = safeVal(row.ctr_principalCount) + safeVal(row.ctr_secondaryCount);
     const totalProfitEurCtr = safeVal(row.ctr_principalProfitEur) + safeVal(row.ctr_secondaryProfitEur);
@@ -248,18 +259,20 @@ const OperationalRowCells = ({ row, showSalesMetrics = false }) => {
             <td className="px-2 py-2 text-center font-bold bg-green-100/50">{safeVal(totalCountLivr)}</td>
             <td className="px-2 py-2 text-center font-bold bg-green-100/50 border-r">{formatCurrency(totalProfitEurLivr)}</td>
 
-            {/* TARGET & BONUS (MOVED AFTER LIVRARE) */}
+            {/* TARGET & BONUS */}
             <td className="px-2 py-2 text-center text-slate-600 bg-blue-50/30">{formatCurrency(target)}</td>
             <td className="px-2 py-2 text-center font-bold text-green-700 bg-blue-100/50 border-r">{formatCurrency(bonus)}</td>
 
-            {/* ALTELE */}
-            {/* <td className="px-2 py-2 text-center text-xs text-slate-500">{formatCurrency(safeVal(row.profitRonRaw))}</td> */}
             <td className="px-2 py-2 text-center font-bold text-blue-800 bg-blue-50/50 border-l border-r border-blue-100">
                 {formatNumber(avgProfitability)}%
             </td>
             
             <td className="px-2 py-2 text-center">{websiteCount}</td>
             <td className="px-2 py-2 text-center">{formatCurrency(safeVal(row.websiteProfit))}</td>
+            <td className="px-2 py-2 text-center bg-purple-50/30">{safeVal(row.websiteCountSec)}</td>
+            <td className="px-2 py-2 text-center bg-purple-50/30 border-r">{formatCurrency(safeVal(row.websiteProfitSec))}</td>
+            <td className="px-2 py-2 text-center bg-orange-50/30 border-r bold text-orange-900">{safeVal(row.burseCount)}</td>
+
             <td className="px-2 py-2 text-center bg-purple-50 font-medium text-purple-700">{solicitari}</td>
             <td className="px-2 py-2 text-center font-bold text-slate-700">{conversionRateWebsite}%</td>
             
@@ -274,46 +287,35 @@ const OperationalRowCells = ({ row, showSalesMetrics = false }) => {
 };
 
 const TableFooter = ({ data, showSalesMetrics }) => {
-    // Calcul Totaluri si Medii
     const totals = data.reduce((acc, row) => {
-        // Sales
         acc.contactat += safeVal(row.contactat);
         acc.calificat += safeVal(row.calificat);
         acc.emailsCount += safeVal(row.emailsCount);
         acc.callsCount += safeVal(row.callsCount);
-        // Common
         acc.suppliersAdded += safeVal(row.suppliersAdded);
-        
-        // Contract
         acc.ctr_principalCount += safeVal(row.ctr_principalCount);
         acc.ctr_principalProfitEur += safeVal(row.ctr_principalProfitEur);
         acc.ctr_secondaryCount += safeVal(row.ctr_secondaryCount);
         acc.ctr_secondaryProfitEur += safeVal(row.ctr_secondaryProfitEur);
-        
-        // Livrare
         acc.livr_principalCount += safeVal(row.livr_principalCount);
         acc.livr_principalProfitEur += safeVal(row.livr_principalProfitEur);
         acc.livr_secondaryCount += safeVal(row.livr_secondaryCount);
         acc.livr_secondaryProfitEur += safeVal(row.livr_secondaryProfitEur);
-        
-        // Web
         acc.websiteCount += safeVal(row.websiteCount);
         acc.websiteProfit += safeVal(row.websiteProfit);
         acc.solicitariCount += safeVal(row.solicitariCount);
-        
-        // Financials (Sum for averages)
         acc.sumClientTerms += safeVal(row.sumClientTerms);
         acc.countClientTerms += safeVal(row.countClientTerms);
         acc.sumSupplierTerms += safeVal(row.sumSupplierTerms);
         acc.countSupplierTerms += safeVal(row.countSupplierTerms);
         acc.overdueInvoicesCount += safeVal(row.overdueInvoicesCount);
-        
         acc.sumProfitability += safeVal(row.sumProfitability);
         acc.countProfitability += safeVal(row.countProfitability);
-        
         acc.supplierTermsUnder30 += safeVal(row.supplierTermsUnder30);
         acc.supplierTermsOver30 += safeVal(row.supplierTermsOver30);
-        
+        acc.websiteCountSec += safeVal(row.websiteCountSec);
+        acc.websiteProfitSec += safeVal(row.websiteProfitSec);
+        acc.burseCount += safeVal(row.burseCount);
         return acc;
     }, {
         contactat: 0, calificat: 0, emailsCount: 0, callsCount: 0,
@@ -325,38 +327,36 @@ const TableFooter = ({ data, showSalesMetrics }) => {
         sumSupplierTerms: 0, countSupplierTerms: 0,
         overdueInvoicesCount: 0,
         supplierTermsUnder30: 0, supplierTermsOver30: 0,
-        sumProfitability: 0, countProfitability: 0
+        sumProfitability: 0, countProfitability: 0,
+        websiteCountSec: 0, websiteProfitSec: 0, burseCount: 0
     });
 
     const count = data.length || 1;
-
-    // Derived Totals
     const totalCtrCount = totals.ctr_principalCount + totals.ctr_secondaryCount;
     const totalCtrProfit = totals.ctr_principalProfitEur + totals.ctr_secondaryProfitEur;
     const totalLivrCount = totals.livr_principalCount + totals.livr_secondaryCount;
     const totalLivrProfit = totals.livr_principalProfitEur + totals.livr_secondaryProfitEur;
-    
-    // Derived Averages (Global)
     const avgProfitability = totals.countProfitability > 0 ? totals.sumProfitability / totals.countProfitability : 0;
     const avgClientTerm = totals.countClientTerms > 0 ? totals.sumClientTerms / totals.countClientTerms : 0;
     const avgSupplierTerm = totals.countSupplierTerms > 0 ? totals.sumSupplierTerms / totals.countSupplierTerms : 0;
-    
-    // Derived Rates
     const totalLeads = totals.calificat + totals.contactat;
     const rateConvClients = totalLeads > 0 ? (totals.calificat / totalLeads) * 100 : 0;
     const rateConvWeb = totals.solicitariCount > 0 ? (totals.websiteCount / totals.solicitariCount) * 100 : 0;
-
-    // Helper for Average Row (divide by count)
     const avg = (val) => val / count;
-
-    // Target (0 always) and Bonus (Total Profit Contract - 0)
     const targetTotal = 0;
     const bonusTotal = totalCtrProfit - targetTotal;
     const bonusAvg = bonusTotal / count;
 
+    let footerSales1 = '';
+    let footerSales2 = '';
+
+    if (showSalesMetrics) {
+        footerSales1 = `<td class="text-center">${totals.contactat}</td><td class="text-center">${totals.calificat}</td><td class="text-center">${formatNumber(rateConvClients)}%</td><td class="text-center">${totals.emailsCount}</td><td class="text-center border-r">${totals.callsCount}</td>`;
+        footerSales2 = `<td class="text-center">${formatNumber(avg(totals.contactat))}</td><td class="text-center">${formatNumber(avg(totals.calificat))}</td><td class="text-center">-</td><td class="text-center">${formatNumber(avg(totals.emailsCount))}</td><td class="text-center border-r">${formatNumber(avg(totals.callsCount))}</td>`;
+    }
+
     return (
         <tfoot className="bg-gray-100 border-t-2 border-gray-300 font-bold text-gray-800">
-            {/* ROW 1: TOTAL */}
             <tr>
                 <td className="px-3 py-2 text-left bg-gray-200">TOTAL</td>
                 {showSalesMetrics && (
@@ -370,30 +370,30 @@ const TableFooter = ({ data, showSalesMetrics }) => {
                 )}
                 <td className="px-2 py-2 text-center border-r">{totals.suppliersAdded}</td>
                 
-                {/* Contract */}
                 <td className="px-2 py-2 text-center">{totals.ctr_principalCount}</td>
                 <td className="px-2 py-2 text-center">{formatCurrency(totals.ctr_principalProfitEur)}</td>
                 <td className="px-2 py-2 text-center">{totals.ctr_secondaryCount}</td>
                 <td className="px-2 py-2 text-center">{formatCurrency(totals.ctr_secondaryProfitEur)}</td>
                 <td className="px-2 py-2 text-center">{totalCtrCount}</td>
                 <td className="px-2 py-2 text-center border-r">{formatCurrency(totalCtrProfit)}</td>
-
-                {/* Livrare */}
+                
                 <td className="px-2 py-2 text-center">{totals.livr_principalCount}</td>
                 <td className="px-2 py-2 text-center">{formatCurrency(totals.livr_principalProfitEur)}</td>
                 <td className="px-2 py-2 text-center">{totals.livr_secondaryCount}</td>
                 <td className="px-2 py-2 text-center">{formatCurrency(totals.livr_secondaryProfitEur)}</td>
                 <td className="px-2 py-2 text-center">{totalLivrCount}</td>
                 <td className="px-2 py-2 text-center border-r">{formatCurrency(totalLivrProfit)}</td>
-
-                {/* Target & Bonus */}
+                
                 <td className="px-2 py-2 text-center">{formatCurrency(targetTotal)}</td>
                 <td className="px-2 py-2 text-center border-r text-green-700">{formatCurrency(bonusTotal)}</td>
 
-                {/* Other */}
                 <td className="px-2 py-2 text-center border-l border-r">{formatNumber(avgProfitability)}%</td>
                 <td className="px-2 py-2 text-center">{totals.websiteCount}</td>
-                <td className="px-2 py-2 text-center">{formatCurrency(totals.websiteProfit)}</td>
+                <td className="px-2 py-2 text-center border-r">{formatCurrency(totals.websiteProfit)}</td>
+                <td className="px-2 py-2 text-center">{totals.websiteCountSec}</td>
+                <td className="px-2 py-2 text-center border-r">{formatCurrency(totals.websiteProfitSec)}</td>
+                <td className="px-2 py-2 text-center border-r">{totals.burseCount}</td>
+
                 <td className="px-2 py-2 text-center">{totals.solicitariCount}</td>
                 <td className="px-2 py-2 text-center">{formatNumber(rateConvWeb)}%</td>
                 
@@ -403,8 +403,6 @@ const TableFooter = ({ data, showSalesMetrics }) => {
                 <td className="px-2 py-2 text-center">{totals.supplierTermsUnder30}</td>
                 <td className="px-2 py-2 text-center">{totals.supplierTermsOver30}</td>
             </tr>
-
-            {/* ROW 2: MEDIA */}
             <tr className="text-gray-600 italic">
                 <td className="px-3 py-2 text-left bg-gray-200">MEDIA</td>
                 {showSalesMetrics && (
@@ -418,30 +416,30 @@ const TableFooter = ({ data, showSalesMetrics }) => {
                 )}
                 <td className="px-2 py-2 text-center border-r">{formatNumber(avg(totals.suppliersAdded))}</td>
                 
-                {/* Contract */}
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totals.ctr_principalCount))}</td>
                 <td className="px-2 py-2 text-center">{formatCurrency(avg(totals.ctr_principalProfitEur))}</td>
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totals.ctr_secondaryCount))}</td>
                 <td className="px-2 py-2 text-center">{formatCurrency(avg(totals.ctr_secondaryProfitEur))}</td>
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totalCtrCount))}</td>
                 <td className="px-2 py-2 text-center border-r">{formatCurrency(avg(totalCtrProfit))}</td>
-
-                {/* Livrare */}
+                
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totals.livr_principalCount))}</td>
                 <td className="px-2 py-2 text-center">{formatCurrency(avg(totals.livr_principalProfitEur))}</td>
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totals.livr_secondaryCount))}</td>
                 <td className="px-2 py-2 text-center">{formatCurrency(avg(totals.livr_secondaryProfitEur))}</td>
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totalLivrCount))}</td>
                 <td className="px-2 py-2 text-center border-r">{formatCurrency(avg(totalLivrProfit))}</td>
-
-                {/* Target & Bonus */}
+                
                 <td className="px-2 py-2 text-center">{formatCurrency(0)}</td>
                 <td className="px-2 py-2 text-center border-r text-green-700">{formatCurrency(bonusAvg)}</td>
 
-                {/* Other */}
                 <td className="px-2 py-2 text-center border-l border-r">-</td>
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totals.websiteCount))}</td>
-                <td className="px-2 py-2 text-center">{formatCurrency(avg(totals.websiteProfit))}</td>
+                <td className="px-2 py-2 text-center border-r">{formatCurrency(avg(totals.websiteProfit))}</td>
+                <td className="px-2 py-2 text-center">{formatNumber(avg(totals.websiteCountSec))}</td>
+                <td className="px-2 py-2 text-center border-r">{formatCurrency(avg(totals.websiteProfitSec))}</td>
+                <td className="px-2 py-2 text-center border-r">{formatNumber(avg(totals.burseCount))}</td>
+
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totals.solicitariCount))}</td>
                 <td className="px-2 py-2 text-center">-</td>
                 
@@ -483,10 +481,15 @@ const TableHeader = ({ showSalesMetrics }) => (
             <th className="px-2 py-3 text-center bg-blue-50/30 text-blue-900 border-b border-blue-200">Target</th>
             <th className="px-2 py-3 text-center bg-blue-100/50 text-green-800 border-b border-blue-200 border-r">Bonus</th>
 
-            {/* <th className="px-2 py-3 text-center">Profit RON<br/>(Brut)</th> */}
             <th className="px-2 py-3 text-center bg-blue-50 text-blue-800">Profitabilitate<br/>%</th>
-            <th className="px-2 py-3 text-center">Curse<br/>Web</th>
-            <th className="px-2 py-3 text-center">Profit<br/>Web</th>
+            <th className="px-2 py-3 text-center">Curse<br/>Web Pr.</th>
+            <th className="px-2 py-3 text-center border-r">Profit<br/>Web Pr.</th>
+            
+            <th className="px-2 py-3 text-center bg-purple-50/30">Curse<br/>Web Sec.</th>
+            <th className="px-2 py-3 text-center bg-purple-50/30 border-r">Profit<br/>Web Sec.</th>
+
+            <th className="px-2 py-3 text-center bg-orange-50/30 border-r text-orange-800">Curse<br/>Burse</th>
+
             <th className="px-2 py-3 text-center bg-purple-50">Solicitări<br/>Web</th>
             <th className="px-2 py-3 text-center">Conv. Web<br/>%</th>
             <th className="px-2 py-3 text-center">Termen Mediu<br/>Plată Client</th>
@@ -505,7 +508,7 @@ const TableHeader = ({ showSalesMetrics }) => (
             <th className="px-1 py-2 text-center">Curse Sec.</th>
             <th className="px-1 py-2 text-center">Profit Sec.</th>
             <th className="px-1 py-2 text-center bg-blue-100/50 font-bold">Total Curse</th>
-            <th className="px-1 py-2 text-center bg-blue-100/50 border-r font-bold">Total Profit</th>
+            <th className="px-1 py-2 text-center bg-blue-100/50 font-bold">Total Profit</th>
 
             <th className="px-1 py-2 text-center bg-green-50/30">Curse Pr.</th>
             <th className="px-1 py-2 text-center bg-green-50/30">Profit Pr.</th>
@@ -517,42 +520,107 @@ const TableHeader = ({ showSalesMetrics }) => (
             <th className="bg-blue-50/30"></th>
             <th className="bg-blue-100/50 border-r"></th>
 
-            <th colSpan={11}></th>
+            <th colSpan={14}></th>
         </tr>
     </thead>
 );
 
-const OperationalTable = ({ data, dateRange }) => {
+const CompanyTable = ({ stats }) => {
+    // Helper to render breakout rows
+    const renderBreakdownRows = (breakdownObj) => {
+        // ... (not used, keeping for structure if needed later)
+        return null;
+    };
+    
+    // Function to calculate %
+    const calcPct = (count, total) => total > 0 ? ((count / total) * 100).toFixed(1) + "%" : "0.0%";
+    
+    // Helper to render a section of rows for a specific breakdown
+    const renderBreakdownSection = (title, fieldKey) => {
+        // Collect all unique keys from both CTR and LIVR
+        const ctrData = stats.ctr.breakdowns?.[fieldKey] || {};
+        const livrData = stats.livr.breakdowns?.[fieldKey] || {};
+        const allKeys = new Set([...Object.keys(ctrData), ...Object.keys(livrData)]);
+        
+        if (allKeys.size === 0) return null;
+        
+        return (
+            <>
+                <tr className="bg-gray-200"><td colSpan="3" className="font-bold text-xs uppercase px-4 py-1">{title}</td></tr>
+                {[...allKeys].sort().map(key => (
+                    <tr key={key} className="border-b text-xs">
+                        <td className="px-4 py-1">{key}</td>
+                        <td className="px-4 py-1 text-right">
+                            {ctrData[key] || 0} <span className="text-gray-500 text-[10px]">({calcPct(ctrData[key] || 0, stats.ctr.count)})</span>
+                        </td>
+                        <td className="px-4 py-1 text-right">
+                            {livrData[key] || 0} <span className="text-gray-500 text-[10px]">({calcPct(livrData[key] || 0, stats.livr.count)})</span>
+                        </td>
+                    </tr>
+                ))}
+            </>
+        );
+    };
+
     return (
-        <div className="overflow-x-auto bg-white rounded-lg shadow border border-slate-200">
-            <div className="p-4 border-b border-slate-200 bg-slate-50">
-                <h3 className="font-bold text-slate-800">
-                    Departamentul de Operațiuni în intervalul: {dateRange}
-                </h3>
+        <div className="overflow-x-auto bg-white rounded-lg shadow border border-slate-200 mt-8">
+             <div className="p-4 border-b border-slate-200 bg-slate-800 text-white">
+                <h3 className="font-bold">Total Companie (Global)</h3>
             </div>
-            <table className="w-full text-xs text-left text-slate-600 whitespace-nowrap">
-                <TableHeader showSalesMetrics={false} />
+            <table className="w-full text-sm text-left text-slate-800">
+                <thead className="bg-slate-100 border-b border-slate-300">
+                    <tr>
+                         <th className="px-4 py-3">Metrică</th>
+                         <th className="px-4 py-3 text-right">După Data Contract</th>
+                         <th className="px-4 py-3 text-right">După Data Livrare</th>
+                    </tr>
+                </thead>
                 <tbody>
-                    {data.map((row, index) => (
-                        <tr key={index} className="border-b hover:bg-slate-50">
-                            <OperationalRowCells row={row} showSalesMetrics={false} />
-                        </tr>
-                    ))}
-                    {data.length === 0 && (
-                        <tr>
-                            <td colSpan={30} className="px-4 py-8 text-center text-slate-500">
-                                Nu există date disponibile pentru perioada selectată.
-                            </td>
-                        </tr>
-                    )}
+                     <tr className="border-b bg-blue-50">
+                         <td className="px-4 py-3 font-bold">Număr Total Curse</td>
+                         <td className="px-4 py-3 text-right font-bold">{stats.ctr.count}</td>
+                         <td className="px-4 py-3 text-right font-bold">{stats.livr.count}</td>
+                     </tr>
+                     <tr className="border-b">
+                         <td className="px-4 py-3 font-bold">Profit Total (EUR)</td>
+                         <td className="px-4 py-3 text-right font-bold text-green-700">{formatCurrency(stats.ctr.profit)}</td>
+                         <td className="px-4 py-3 text-right font-bold text-green-700">{formatCurrency(stats.livr.profit)}</td>
+                     </tr>
+                     <tr className="border-b">
+                         <td className="px-4 py-3">Website / Fix - Curse</td>
+                         <td className="px-4 py-3 text-right">{stats.ctr.websiteCount}</td>
+                         <td className="px-4 py-3 text-right">{stats.livr.websiteCount}</td>
+                     </tr>
+                     <tr className="border-b">
+                         <td className="px-4 py-3">Website / Fix - Profit</td>
+                         <td className="px-4 py-3 text-right">{formatCurrency(stats.ctr.websiteProfit)}</td>
+                         <td className="px-4 py-3 text-right">{formatCurrency(stats.livr.websiteProfit)}</td>
+                     </tr>
+                     <tr className="border-b">
+                         <td className="px-4 py-3">Burse - Curse</td>
+                         <td className="px-4 py-3 text-right">{stats.ctr.burseCount}</td>
+                         <td className="px-4 py-3 text-right">{stats.livr.burseCount}</td>
+                     </tr>
+                     
+                     {/* BREAKDOWNS */}
+                     {renderBreakdownSection("Tip serviciu", "STATUS_CTR")}
+                     {renderBreakdownSection("Dep", "DEP")}
+                     {renderBreakdownSection("Status Plata Client", "STATUS_PLATA_CLIENT")}
+                     {renderBreakdownSection("Moneda Cursa", "MONEDA")}
+                     {renderBreakdownSection("Sursa Client", "SURSA")}
+                     {renderBreakdownSection("Implicare", "IMPLICARE")}
+                     {renderBreakdownSection("Client Pe", "CLIENT_PE")}
+                     {renderBreakdownSection("Furnizor Pe", "FURNIZ_PE")}
+                     {renderBreakdownSection("Client/Furnizor Pe", "CLIENT_FURNIZOR_PE")}
+                     {renderBreakdownSection("Mod Transport", "MOD_TRANSPORT")}
+                     {renderBreakdownSection("Tip Marfa", "TIP_MARFA")}
+                     {renderBreakdownSection("Ocupare Mij Transport", "OCUPARE")}
                 </tbody>
-                {data.length > 0 && <TableFooter data={data} showSalesMetrics={false} />}
             </table>
         </div>
     );
-};
+}
 
-// Reusing OperationalTable structure for Management since fields are similar
 const ManagementTable = ({ data, dateRange }) => {
     return (
         <div className="overflow-x-auto bg-white rounded-lg shadow border border-slate-200">
@@ -583,6 +651,35 @@ const ManagementTable = ({ data, dateRange }) => {
     );
 };
 
+const OperationalTable = ({ data, dateRange }) => {
+    return (
+        <div className="overflow-x-auto bg-white rounded-lg shadow border border-slate-200">
+            <div className="p-4 border-b border-slate-200 bg-slate-50">
+                <h3 className="font-bold text-slate-800">
+                    Departamentul de Operațiuni în intervalul: {dateRange}
+                </h3>
+            </div>
+            <table className="w-full text-xs text-left text-slate-600 whitespace-nowrap">
+                <TableHeader showSalesMetrics={false} />
+                <tbody>
+                    {data.map((row, index) => (
+                        <tr key={index} className="border-b hover:bg-slate-50">
+                            <OperationalRowCells row={row} showSalesMetrics={false} />
+                        </tr>
+                    ))}
+                    {data.length === 0 && (
+                        <tr>
+                            <td colSpan={30} className="px-4 py-8 text-center text-slate-500">
+                                Nu există date disponibile pentru perioada selectată.
+                            </td>
+                        </tr>
+                    )}
+                </tbody>
+                {data.length > 0 && <TableFooter data={data} showSalesMetrics={false} />}
+            </table>
+        </div>
+    );
+};
 
 const SalesTable = ({ data, dateRange }) => {
     return (
@@ -624,7 +721,11 @@ export default function App() {
     // State per departament
     const [opsStats, setOpsStats] = useState([]);
     const [salesStats, setSalesStats] = useState([]);
-    const [mgmtStats, setMgmtStats] = useState([]); // New state for Management
+    const [mgmtStats, setMgmtStats] = useState([]); 
+    const [companyStats, setCompanyStats] = useState({ 
+        ctr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} }, 
+        livr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} } 
+    });
     
     const [dateRangeStr, setDateRangeStr] = useState("");
     const [statusMessage, setStatusMessage] = useState("");
@@ -658,14 +759,10 @@ export default function App() {
             end.setHours(23, 59, 59, 999);
         } else if (selectedPeriod === 'custom') {
             if (!customStart || !customEnd) return null;
-            // FIX: Create date components explicitly to avoid UTC shift
             const sParts = customStart.split('-').map(Number);
             const eParts = customEnd.split('-').map(Number);
-            
-            // new Date(y, m, d) creates local time
             const s = new Date(sParts[0], sParts[1] - 1, sParts[2]);
             const e = new Date(eParts[0], eParts[1] - 1, eParts[2]);
-            
             s.setHours(0,0,0,0);
             e.setHours(23,59,59,999);
             return { start: s, end: e };
@@ -690,6 +787,28 @@ export default function App() {
 
         const filename = `Raport_${dateRangeStr.replace(/[^a-zA-Z0-9.-]/g, '_')}.xls`;
         
+        // --- Helper for creating Breakdown Rows in Excel ---
+        const createBreakdownRowsExcel = (title, fieldKey) => {
+             const ctrData = companyStats.ctr.breakdowns?.[fieldKey] || {};
+             const livrData = companyStats.livr.breakdowns?.[fieldKey] || {};
+             const allKeys = new Set([...Object.keys(ctrData), ...Object.keys(livrData)]);
+             
+             if (allKeys.size === 0) return "";
+             
+             let rows = `<tr style="background-color: #e5e7eb; font-weight:bold;"><td colspan="3">${title}</td></tr>`;
+             
+             const calcPct = (c, t) => t > 0 ? ((c/t)*100).toFixed(1)+"%" : "0.0%";
+
+             [...allKeys].sort().forEach(k => {
+                 rows += `<tr>
+                    <td>${k}</td>
+                    <td style="text-align:right;">${ctrData[k]||0} (${calcPct(ctrData[k]||0, companyStats.ctr.count)})</td>
+                    <td style="text-align:right;">${livrData[k]||0} (${calcPct(livrData[k]||0, companyStats.livr.count)})</td>
+                 </tr>`;
+             });
+             return rows;
+        };
+
         const style = `
             <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
             <head>
@@ -729,7 +848,6 @@ export default function App() {
                  const totalCountLivr = (row.livr_principalCount || 0) + (row.livr_secondaryCount || 0);
                  const totalProfitEurLivr = (row.livr_principalProfitEur || 0) + (row.livr_secondaryProfitEur || 0);
                  
-                 // Target & Bonus
                  const target = 0;
                  const bonus = totalProfitEurCtr - target;
 
@@ -754,7 +872,7 @@ export default function App() {
                     <td class="bg-blue">${safeVal(row.ctr_principalCount)}</td><td class="bg-blue">${formatCurrency(safeVal(row.ctr_principalProfitEur))}</td>
                     <td>${safeVal(row.ctr_secondaryCount)}</td><td>${formatCurrency(safeVal(row.ctr_secondaryProfitEur))}</td>
                     <td class="bg-blue bold">${safeVal(totalCountCtr)}</td>
-                    <td class="bg-blue bold text-r border-r">${formatCurrency(totalProfitEurCtr)}</td>
+                    <td class="bg-blue bold">${formatCurrency(totalProfitEurCtr)}</td>
 
                     <td class="bg-green">${safeVal(row.livr_principalCount)}</td><td class="bg-green">${formatCurrency(safeVal(row.livr_principalProfitEur))}</td>
                     <td>${safeVal(row.livr_secondaryCount)}</td><td>${formatCurrency(safeVal(row.livr_secondaryProfitEur))}</td>
@@ -764,10 +882,12 @@ export default function App() {
                     <td class="bg-blue">${formatCurrency(target)}</td>
                     <td class="bg-blue bold text-green border-r">${formatCurrency(bonus)}</td>
 
-                    {/* PROFIT RON RAW REMOVED FROM EXPORT AS WELL */}
                     <td class="bold bg-blue" style="background-color: #e3f2fd;">${avgProfitability}%</td>
                     
                     <td>${safeVal(row.websiteCount)}</td><td>${formatCurrency(safeVal(row.websiteProfit))}</td>
+                    <td class="bg-purple/30">${safeVal(row.websiteCountSec)}</td><td class="bg-purple/30 border-r">${formatCurrency(safeVal(row.websiteProfitSec))}</td>
+                    <td class="bg-orange/30 border-r bold">${safeVal(row.burseCount)}</td>
+
                     <td class="bg-purple">${safeVal(row.solicitariCount)}</td><td class="bold">${conversionRateWebsite}%</td>
                     
                     <td>${avgClient}</td><td>${avgSupplier}</td>
@@ -776,46 +896,35 @@ export default function App() {
                  </tr>`;
             }).join('');
             
-            // CALCULATE FOOTER FOR EXPORT
              const totals = stats.reduce((acc, row) => {
-                // Sales
                 acc.contactat += safeVal(row.contactat);
                 acc.calificat += safeVal(row.calificat);
                 acc.emailsCount += safeVal(row.emailsCount);
                 acc.callsCount += safeVal(row.callsCount);
-                // Common
                 acc.suppliersAdded += safeVal(row.suppliersAdded);
-                
-                // Contract
                 acc.ctr_principalCount += safeVal(row.ctr_principalCount);
                 acc.ctr_principalProfitEur += safeVal(row.ctr_principalProfitEur);
                 acc.ctr_secondaryCount += safeVal(row.ctr_secondaryCount);
                 acc.ctr_secondaryProfitEur += safeVal(row.ctr_secondaryProfitEur);
-                
-                // Livrare
                 acc.livr_principalCount += safeVal(row.livr_principalCount);
                 acc.livr_principalProfitEur += safeVal(row.livr_principalProfitEur);
                 acc.livr_secondaryCount += safeVal(row.livr_secondaryCount);
                 acc.livr_secondaryProfitEur += safeVal(row.livr_secondaryProfitEur);
-                
-                // Web
                 acc.websiteCount += safeVal(row.websiteCount);
                 acc.websiteProfit += safeVal(row.websiteProfit);
                 acc.solicitariCount += safeVal(row.solicitariCount);
-                
-                // Financials (Sum for averages)
                 acc.sumClientTerms += safeVal(row.sumClientTerms);
                 acc.countClientTerms += safeVal(row.countClientTerms);
                 acc.sumSupplierTerms += safeVal(row.sumSupplierTerms);
                 acc.countSupplierTerms += safeVal(row.countSupplierTerms);
                 acc.overdueInvoicesCount += safeVal(row.overdueInvoicesCount);
-                
                 acc.sumProfitability += safeVal(row.sumProfitability);
                 acc.countProfitability += safeVal(row.countProfitability);
-                
                 acc.supplierTermsUnder30 += safeVal(row.supplierTermsUnder30);
                 acc.supplierTermsOver30 += safeVal(row.supplierTermsOver30);
-                
+                acc.websiteCountSec += safeVal(row.websiteCountSec);
+                acc.websiteProfitSec += safeVal(row.websiteProfitSec);
+                acc.burseCount += safeVal(row.burseCount);
                 return acc;
             }, {
                 contactat: 0, calificat: 0, emailsCount: 0, callsCount: 0,
@@ -827,7 +936,8 @@ export default function App() {
                 sumSupplierTerms: 0, countSupplierTerms: 0,
                 overdueInvoicesCount: 0,
                 supplierTermsUnder30: 0, supplierTermsOver30: 0,
-                sumProfitability: 0, countProfitability: 0
+                sumProfitability: 0, countProfitability: 0,
+                websiteCountSec: 0, websiteProfitSec: 0, burseCount: 0
             });
             
             const count = stats.length || 1;
@@ -842,8 +952,6 @@ export default function App() {
             const rateConvClients = totalLeads > 0 ? (totals.calificat / totalLeads) * 100 : 0;
             const rateConvWeb = totals.solicitariCount > 0 ? (totals.websiteCount / totals.solicitariCount) * 100 : 0;
             const avg = (val) => val / count;
-
-            // Target (0 always) and Bonus (Total Profit Contract - 0)
             const targetTotal = 0;
             const bonusTotal = totalCtrProfit - targetTotal;
             const bonusAvg = bonusTotal / count;
@@ -852,8 +960,8 @@ export default function App() {
             let footerSales2 = '';
 
             if (isSales) {
-                footerSales1 = `<td class="text-center">${totals.contactat}</td><td class="text-center">${totals.calificat}</td><td class="text-center">${formatNumber(rateConvClients)}%</td><td class="text-center">${totals.emailsCount}</td><td class="text-center">${totals.callsCount}</td>`;
-                footerSales2 = `<td class="text-center">${formatNumber(avg(totals.contactat))}</td><td class="text-center">${formatNumber(avg(totals.calificat))}</td><td class="text-center">-</td><td class="text-center">${formatNumber(avg(totals.emailsCount))}</td><td class="text-center">${formatNumber(avg(totals.callsCount))}</td>`;
+                footerSales1 = `<td class="text-center">${totals.contactat}</td><td class="text-center">${totals.calificat}</td><td class="text-center">${formatNumber(rateConvClients)}%</td><td class="text-center">${totals.emailsCount}</td><td class="text-center border-r">${totals.callsCount}</td>`;
+                footerSales2 = `<td class="text-center">${formatNumber(avg(totals.contactat))}</td><td class="text-center">${formatNumber(avg(totals.calificat))}</td><td class="text-center">-</td><td class="text-center">${formatNumber(avg(totals.emailsCount))}</td><td class="text-center border-r">${formatNumber(avg(totals.callsCount))}</td>`;
             }
 
             const footer = `
@@ -874,6 +982,9 @@ export default function App() {
 
                     <td>${formatNumber(avgProfitability)}%</td>
                     <td>${totals.websiteCount}</td><td>${formatCurrency(totals.websiteProfit)}</td>
+                    <td>${totals.websiteCountSec}</td><td>${formatCurrency(totals.websiteProfitSec)}</td>
+                    <td>${totals.burseCount}</td>
+
                     <td>${totals.solicitariCount}</td><td>${formatNumber(rateConvWeb)}%</td>
                     
                     <td>${formatNumber(avgClientTerm)}</td><td>${formatNumber(avgSupplierTerm)}</td>
@@ -897,6 +1008,9 @@ export default function App() {
 
                     <td>-</td>
                     <td>${formatNumber(avg(totals.websiteCount))}</td><td>${formatCurrency(avg(totals.websiteProfit))}</td>
+                    <td>${formatNumber(avg(totals.websiteCountSec))}</td><td>${formatCurrency(avg(totals.websiteProfitSec))}</td>
+                    <td>${formatNumber(avg(totals.burseCount))}</td>
+
                     <td>${formatNumber(avg(totals.solicitariCount))}</td><td>-</td>
                     
                     <td>-</td><td>-</td>
@@ -907,6 +1021,30 @@ export default function App() {
 
             return bodyRows + footer;
         };
+        
+        // Add Company Table to Export
+        const companyRows = `
+            <tr style="background-color: #1e293b; color: white; font-weight: bold;"><td colspan="3">TOTAL COMPANIE (GLOBAL)</td></tr>
+            <tr style="background-color: #f3f4f6;"><td>Metrică</td><td style="text-align:right;">După Data Contract</td><td style="text-align:right;">După Data Livrare</td></tr>
+            <tr><td>Număr Total Curse</td><td style="text-align:right;">${companyStats.ctr.count}</td><td style="text-align:right;">${companyStats.livr.count}</td></tr>
+            <tr><td>Profit Total (EUR)</td><td style="text-align:right; font-weight:bold; color:green;">${formatCurrency(companyStats.ctr.profit)}</td><td style="text-align:right; font-weight:bold; color:green;">${formatCurrency(companyStats.livr.profit)}</td></tr>
+            <tr><td>Website / Fix - Curse</td><td style="text-align:right;">${companyStats.ctr.websiteCount}</td><td style="text-align:right;">${companyStats.livr.websiteCount}</td></tr>
+            <tr><td>Website / Fix - Profit</td><td style="text-align:right;">${formatCurrency(companyStats.ctr.websiteProfit)}</td><td style="text-align:right;">${formatCurrency(companyStats.livr.websiteProfit)}</td></tr>
+            <tr><td>Burse - Curse</td><td style="text-align:right;">${companyStats.ctr.burseCount}</td><td style="text-align:right;">${companyStats.livr.burseCount}</td></tr>
+            <tr><td colspan="3"></td></tr>
+            ${createBreakdownRowsExcel("Tip serviciu", "STATUS_CTR")}
+            ${createBreakdownRowsExcel("Dep", "DEP")}
+            ${createBreakdownRowsExcel("Status Plata Client", "STATUS_PLATA_CLIENT")}
+            ${createBreakdownRowsExcel("Moneda Cursa", "MONEDA")}
+            ${createBreakdownRowsExcel("Sursa Client", "SURSA")}
+            ${createBreakdownRowsExcel("Implicare", "IMPLICARE")}
+            ${createBreakdownRowsExcel("Client Pe", "CLIENT_PE")}
+            ${createBreakdownRowsExcel("Furnizor Pe", "FURNIZ_PE")}
+            ${createBreakdownRowsExcel("Client/Furnizor Pe", "CLIENT_FURNIZOR_PE")}
+            ${createBreakdownRowsExcel("Mod Transport", "MOD_TRANSPORT")}
+            ${createBreakdownRowsExcel("Tip Marfa", "TIP_MARFA")}
+            ${createBreakdownRowsExcel("Ocupare Mij Transport", "OCUPARE")}
+        `;
 
         if (mgmtStats.length) {
              content += `<h2>Departament Management</h2>
@@ -921,8 +1059,11 @@ export default function App() {
                         <th rowspan="2" class="bg-blue">Target</th>
                         <th rowspan="2" class="bg-blue">Bonus</th>
                         <th rowspan="2" class="bg-blue">Profitabilitate<br/>%</th>
-                        <th rowspan="2">Curse<br/>Web</th>
-                        <th rowspan="2">Profit<br/>Web</th>
+                        <th rowspan="2">Curse<br/>Web Pr.</th>
+                        <th rowspan="2">Profit<br/>Web Pr.</th>
+                        <th rowspan="2">Curse<br/>Web Sec.</th>
+                        <th rowspan="2">Profit<br/>Web Sec.</th>
+                        <th rowspan="2">Curse<br/>Burse</th>
                         <th rowspan="2" class="bg-purple">Solicitări<br/>Web</th>
                         <th rowspan="2">Conv. Web<br/>%</th>
                         <th rowspan="2">Termen Mediu<br/>Plată Client</th>
@@ -951,8 +1092,11 @@ export default function App() {
                         <th rowspan="2" class="bg-blue">Target</th>
                         <th rowspan="2" class="bg-blue">Bonus</th>
                         <th rowspan="2" class="bg-blue">Profitabilitate<br/>%</th>
-                        <th rowspan="2">Curse<br/>Web</th>
-                        <th rowspan="2">Profit<br/>Web</th>
+                        <th rowspan="2">Curse<br/>Web Pr.</th>
+                        <th rowspan="2">Profit<br/>Web Pr.</th>
+                        <th rowspan="2">Curse<br/>Web Sec.</th>
+                        <th rowspan="2">Profit<br/>Web Sec.</th>
+                        <th rowspan="2">Curse<br/>Burse</th>
                         <th rowspan="2" class="bg-purple">Solicitări<br/>Web</th>
                         <th rowspan="2">Conv. Web<br/>%</th>
                         <th rowspan="2">Termen Mediu<br/>Plată Client</th>
@@ -986,8 +1130,11 @@ export default function App() {
                         <th rowspan="2" class="bg-blue">Target</th>
                         <th rowspan="2" class="bg-blue">Bonus</th>
                         <th rowspan="2" class="bg-blue">Profitabilitate<br/>%</th>
-                        <th rowspan="2">Curse<br/>Web</th>
-                        <th rowspan="2">Profit<br/>Web</th>
+                        <th rowspan="2">Curse<br/>Web Pr.</th>
+                        <th rowspan="2">Profit<br/>Web Pr.</th>
+                        <th rowspan="2">Curse<br/>Web Sec.</th>
+                        <th rowspan="2">Profit<br/>Web Sec.</th>
+                        <th rowspan="2">Curse<br/>Burse</th>
                         <th rowspan="2" class="bg-purple">Solicitări<br/>Web</th>
                         <th rowspan="2">Conv. Web<br/>%</th>
                         <th rowspan="2">Termen Mediu<br/>Plată Client</th>
@@ -1004,7 +1151,7 @@ export default function App() {
                 <tbody>${renderTableRows(salesStats, true)}</tbody></table>`;
         }
 
-        content += `</body></html>`;
+        content += `<table>${companyRows}</table></body></html>`;
 
         const blob = new Blob([content], { type: 'application/vnd.ms-excel' });
         const url = URL.createObjectURL(blob);
@@ -1217,6 +1364,10 @@ export default function App() {
         setOpsStats([]);
         setSalesStats([]);
         setMgmtStats([]); // Reset management stats
+        setCompanyStats({ 
+            ctr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} }, 
+            livr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} } 
+        });
 
         try {
             const dateFrom = formatDateISO(start);
@@ -1236,6 +1387,27 @@ export default function App() {
             const furnDateCol = furnizoriCols.find(c => c.type === 'date' || c.title.toLowerCase().includes('data'))?.id || "date4";
             const furnPersonCol = furnizoriCols.find(c => c.type === 'people' || c.title.toLowerCase().includes('owner') || c.title.toLowerCase().includes('persoana'))?.id || "person";
             const contactOwnerCol = COLS.CONTACTE.OWNER; 
+
+            // FETCH COLS FOR COMENZI TO FIND ALL DYNAMIC COLUMNS
+            const comenziCols = await fetchColumns(BOARD_ID_COMENZI);
+            
+            // DYNAMIC FINDER HELPER
+            const findColId = (searchTitle, defaultId) => {
+                return comenziCols.find(c => c.title.toLowerCase().trim() === searchTitle.toLowerCase().trim() || c.title.toLowerCase().includes(searchTitle.toLowerCase()))?.id || defaultId;
+            };
+
+            COLS.COMENZI.SURSA = findColId("Sursa", COLS.COMENZI.SURSA);
+            COLS.COMENZI.CRT = findColId("Crt", "crt");
+            COLS.COMENZI.DEP = findColId("Dep", "dep");
+            COLS.COMENZI.IMPLICARE = findColId("Implicare", "implicare");
+            COLS.COMENZI.CLIENT_FURNIZOR_PE = findColId("Client/Furnizor Pe", "client_furnizor");
+            COLS.COMENZI.MOD_TRANSPORT = findColId("Mod Transport", "mod_transport");
+            COLS.COMENZI.TIP_MARFA = findColId("Tip Marfa", "tip_marfa");
+            COLS.COMENZI.OCUPARE = findColId("Ocupare", "ocupare");
+
+            // Console log to debug detections
+            console.log("Detected Columns:", COLS.COMENZI);
+
 
             const comenziCtr = await fetchAllItems(
                 BOARD_ID_COMENZI,
@@ -1348,8 +1520,29 @@ export default function App() {
             supplierTermsUnder30: 0,
             supplierTermsOver30: 0,
             sumProfitability: 0,
-            countProfitability: 0
+            countProfitability: 0,
+
+            // New fields
+            websiteCountSec: 0,
+            websiteProfitSec: 0,
+            burseCount: 0
         }));
+        
+        const companyStatsLocal = {
+             ctr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} }, 
+             livr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} } 
+        };
+        
+        // Helper to aggregate breakdowns
+        const aggregateBreakdown = (targetStats, columnKey, rawVal) => {
+            if (!rawVal) return;
+            const val = String(rawVal).trim();
+            if (val === "" || val.toLowerCase() === "null") return;
+            
+            if (!targetStats.breakdowns[columnKey]) targetStats.breakdowns[columnKey] = {};
+            if (!targetStats.breakdowns[columnKey][val]) targetStats.breakdowns[columnKey][val] = 0;
+            targetStats.breakdowns[columnKey][val]++;
+        };
 
         const opsStatsLocal = generateStats(DEPARTMENTS.operational.employees);
         const salesStatsLocal = generateStats(DEPARTMENTS.sales.employees);
@@ -1388,7 +1581,9 @@ export default function App() {
                 const isRon = currencyVal.includes("RON") || currencyVal.includes("LEI");
 
                 const sursaVal = getCol(COLS.COMENZI.SURSA)?.text?.trim().toLowerCase() || "";
-                const isWebsite = sursaVal === "website" || sursaVal === "telefon / whatsapp fix";
+                // BURSE Logic Update
+                const isWebsite = sursaVal === "website" || sursaVal === "telefon / whatsapp fix" || sursaVal === "fix";
+                const isBurse = sursaVal.includes("timocom") || sursaVal.includes("trans.eu") || sursaVal.includes("cargopedia");
 
                 const clientTerm = extractNumericValue(getCol(COLS.COMENZI.TERMEN_PLATA_CLIENT));
                 const supplierTerm = extractNumericValue(getCol(COLS.COMENZI.TERMEN_PLATA_FURNIZOR));
@@ -1420,22 +1615,50 @@ export default function App() {
                 if (!hasSecondary && valSecundar !== 0) {
                     secondaryIds.push(RAFAEL_ID);
                 }
+                
+                // --- COMPANY STATS (GLOBAL) CTR ---
+                const profitToAddP = isRon ? (valPrincipal / 5) : valPrincipal;
+                const profitToAddS = isRon ? (valSecundar / 5) : valSecundar;
+                const totalItemProfit = profitToAddP + profitToAddS;
+
+                companyStatsLocal.ctr.count++;
+                companyStatsLocal.ctr.profit += totalItemProfit;
+                if (isWebsite) {
+                    companyStatsLocal.ctr.websiteCount++;
+                    companyStatsLocal.ctr.websiteProfit += totalItemProfit; // Profit total for website deals
+                }
+                if (isBurse) {
+                    companyStatsLocal.ctr.burseCount++;
+                }
+                
+                // Aggregation for breakdown
+                aggregateBreakdown(companyStatsLocal.ctr, "STATUS_CTR", getCol(COLS.COMENZI.STATUS_CTR)?.text);
+                aggregateBreakdown(companyStatsLocal.ctr, "DEP", getCol(COLS.COMENZI.DEP)?.text);
+                aggregateBreakdown(companyStatsLocal.ctr, "STATUS_PLATA_CLIENT", getCol(COLS.COMENZI.STATUS_PLATA_CLIENT)?.text);
+                aggregateBreakdown(companyStatsLocal.ctr, "MONEDA", getCol(COLS.COMENZI.MONEDA)?.text);
+                aggregateBreakdown(companyStatsLocal.ctr, "SURSA", getCol(COLS.COMENZI.SURSA)?.text);
+                aggregateBreakdown(companyStatsLocal.ctr, "IMPLICARE", getCol(COLS.COMENZI.IMPLICARE)?.text);
+                aggregateBreakdown(companyStatsLocal.ctr, "CLIENT_PE", getCol(COLS.COMENZI.CLIENT_PE)?.text);
+                aggregateBreakdown(companyStatsLocal.ctr, "FURNIZ_PE", getCol(COLS.COMENZI.FURNIZ_PE)?.text);
+                aggregateBreakdown(companyStatsLocal.ctr, "CLIENT_FURNIZOR_PE", getCol(COLS.COMENZI.CLIENT_FURNIZOR_PE)?.text);
+                aggregateBreakdown(companyStatsLocal.ctr, "MOD_TRANSPORT", getCol(COLS.COMENZI.MOD_TRANSPORT)?.text);
+                aggregateBreakdown(companyStatsLocal.ctr, "TIP_MARFA", getCol(COLS.COMENZI.TIP_MARFA)?.text);
+                aggregateBreakdown(companyStatsLocal.ctr, "OCUPARE", getCol(COLS.COMENZI.OCUPARE)?.text);
+
 
                 applyToAllStats((statsList) => {
                     statsList.forEach(emp => {
                         const isPrincipal = principalIds.includes(String(emp.mondayId));
                         const isSecondary = secondaryIds.includes(String(emp.mondayId));
 
-                        // 1. CALCUL CURSE / PROFIT / WEBSITE / PROFITABILITATE
                         if (isPrincipal) {
                             emp.ctr_principalCount++;
-                            const profitToAdd = isRon ? (valPrincipal / 5) : valPrincipal;
-                            emp.ctr_principalProfitEur += safeVal(profitToAdd);
+                            emp.ctr_principalProfitEur += safeVal(profitToAddP);
                             if (isRon) emp.profitRonRaw += safeVal(valPrincipal);
 
                             if (isWebsite) {
                                 emp.websiteCount++;
-                                emp.websiteProfit += safeVal(profitToAdd);
+                                emp.websiteProfit += safeVal(profitToAddP);
                             }
                             
                             if (hasProfitability) {
@@ -1448,21 +1671,25 @@ export default function App() {
                                 emp.countClientTerms++;
                             }
                             if (isOverdue) emp.overdueInvoicesCount++;
+
+                            if (isBurse) emp.burseCount++;
                         }
 
                         if (isSecondary) {
                             emp.ctr_secondaryCount++;
-                            const profitToAdd = isRon ? (valSecundar / 5) : valSecundar;
-                            emp.ctr_secondaryProfitEur += safeVal(profitToAdd);
+                            emp.ctr_secondaryProfitEur += safeVal(profitToAddS);
                             if (isRon) emp.profitRonRaw += safeVal(valSecundar);
+
+                            if (isWebsite) {
+                                emp.websiteCountSec++;
+                                emp.websiteProfitSec += safeVal(profitToAddS);
+                            }
                         }
 
-                        // 2. CALCUL TERMENE DE PLATA & FACTURI
                         if (isSecondary || (isPrincipal && !hasSecondary)) {
                             if (supplierTerm > 0) {
                                 emp.sumSupplierTerms += supplierTerm;
                                 emp.countSupplierTerms++;
-
                                 if (supplierTerm < 30) emp.supplierTermsUnder30++;
                                 else emp.supplierTermsOver30++;
                             }
@@ -1484,16 +1711,47 @@ export default function App() {
                 const currencyVal = getCol(COLS.COMENZI.MONEDA)?.text?.toUpperCase() || "";
                 const isRon = currencyVal.includes("RON") || currencyVal.includes("LEI");
 
-                // Owneri
+                const sursaVal = getCol(COLS.COMENZI.SURSA)?.text?.trim().toLowerCase() || "";
+                const isWebsite = sursaVal === "website" || sursaVal === "telefon / whatsapp fix" || sursaVal === "fix";
+                const isBurse = ["timocom", "trans.eu", "cargopedia"].some(b => sursaVal.includes(b));
+
                 const colPrincipal = getCol(COLS.COMENZI.PRINCIPAL);
                 const colSecundar = getCol(COLS.COMENZI.SECUNDAR);
                 let principalIds = getPersonIds(colPrincipal);
                 let secondaryIds = getPersonIds(colSecundar);
                 
-                // ORPHAN PROFIT LOGIC for Rafael (Livrari)
                 if (secondaryIds.length === 0 && valSecundar !== 0) {
                     secondaryIds.push(RAFAEL_ID);
                 }
+
+                // --- COMPANY STATS (GLOBAL) LIVR ---
+                const profitToAddP = isRon ? (valPrincipal / 5) : valPrincipal;
+                const profitToAddS = isRon ? (valSecundar / 5) : valSecundar;
+                const totalItemProfit = profitToAddP + profitToAddS;
+
+                companyStatsLocal.livr.count++;
+                companyStatsLocal.livr.profit += totalItemProfit;
+                if (isWebsite) {
+                    companyStatsLocal.livr.websiteCount++;
+                    companyStatsLocal.livr.websiteProfit += totalItemProfit;
+                }
+                if (isBurse) {
+                    companyStatsLocal.livr.burseCount++;
+                }
+
+                 // Aggregation for breakdown
+                aggregateBreakdown(companyStatsLocal.livr, "STATUS_CTR", getCol(COLS.COMENZI.STATUS_CTR)?.text);
+                aggregateBreakdown(companyStatsLocal.livr, "DEP", getCol(COLS.COMENZI.DEP)?.text);
+                aggregateBreakdown(companyStatsLocal.livr, "STATUS_PLATA_CLIENT", getCol(COLS.COMENZI.STATUS_PLATA_CLIENT)?.text);
+                aggregateBreakdown(companyStatsLocal.livr, "MONEDA", getCol(COLS.COMENZI.MONEDA)?.text);
+                aggregateBreakdown(companyStatsLocal.livr, "SURSA", getCol(COLS.COMENZI.SURSA)?.text);
+                aggregateBreakdown(companyStatsLocal.livr, "IMPLICARE", getCol(COLS.COMENZI.IMPLICARE)?.text);
+                aggregateBreakdown(companyStatsLocal.livr, "CLIENT_PE", getCol(COLS.COMENZI.CLIENT_PE)?.text);
+                aggregateBreakdown(companyStatsLocal.livr, "FURNIZ_PE", getCol(COLS.COMENZI.FURNIZ_PE)?.text);
+                aggregateBreakdown(companyStatsLocal.livr, "CLIENT_FURNIZOR_PE", getCol(COLS.COMENZI.CLIENT_FURNIZOR_PE)?.text);
+                aggregateBreakdown(companyStatsLocal.livr, "MOD_TRANSPORT", getCol(COLS.COMENZI.MOD_TRANSPORT)?.text);
+                aggregateBreakdown(companyStatsLocal.livr, "TIP_MARFA", getCol(COLS.COMENZI.TIP_MARFA)?.text);
+                aggregateBreakdown(companyStatsLocal.livr, "OCUPARE", getCol(COLS.COMENZI.OCUPARE)?.text);
 
                 applyToAllStats((statsList) => {
                     statsList.forEach(emp => {
@@ -1502,13 +1760,11 @@ export default function App() {
 
                         if (isPrincipal) {
                             emp.livr_principalCount++;
-                            const profitToAdd = isRon ? (valPrincipal / 5) : valPrincipal;
-                            emp.livr_principalProfitEur += safeVal(profitToAdd);
+                            emp.livr_principalProfitEur += safeVal(profitToAddP);
                         }
                         if (isSecondary) {
                             emp.livr_secondaryCount++;
-                            const profitToAdd = isRon ? (valSecundar / 5) : valSecundar;
-                            emp.livr_secondaryProfitEur += safeVal(profitToAdd);
+                            emp.livr_secondaryProfitEur += safeVal(profitToAddS);
                         }
                     });
                 });
@@ -1590,6 +1846,7 @@ export default function App() {
         setOpsStats(opsStatsLocal);
         setSalesStats(salesStatsLocal);
         setMgmtStats(mgmtStatsLocal);
+        setCompanyStats(companyStatsLocal);
     };
 
     return (
@@ -1645,6 +1902,7 @@ export default function App() {
                     {mgmtStats.length > 0 && <div className="animate-fade-in"><ManagementTable data={mgmtStats} dateRange={dateRangeStr} /></div>}
                     {opsStats.length > 0 && <div className="animate-fade-in"><OperationalTable data={opsStats} dateRange={dateRangeStr} /></div>}
                     {salesStats.length > 0 && <div className="animate-fade-in"><SalesTable data={salesStats} dateRange={dateRangeStr} /></div>}
+                    <div className="animate-fade-in"><CompanyTable stats={companyStats} /></div>
                 </div>
             </div>
         </div>
