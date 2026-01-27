@@ -53,7 +53,11 @@ const COLS = {
         CLIENT_FURNIZOR_PE: "client_furnizor_pe_column_id", 
         MOD_TRANSPORT: "mod_transport_column_id", 
         TIP_MARFA: "tip_marfa_column_id", 
-        OCUPARE: "ocupare_mij_transport_column_id"
+        OCUPARE: "ocupare_mij_transport_column_id",
+
+        // ADDED EXPLICITLY
+        CLIENT_PE: "color_mktcqj26",
+        FURNIZ_PE: "color_mkt9as8p"
     },
     FURNIZORI: {
         DATA: "date4", 
@@ -122,7 +126,6 @@ const formatNumber = (val, decimals = 1) => {
     return val.toFixed(decimals);
 };
 
-// Util pentru a crea date locale corecte (fara UTC shift)
 const formatDateISO = (date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -134,43 +137,28 @@ const safeVal = (v) => (typeof v === 'number' && !isNaN(v) ? v : 0);
 
 const extractNumericValue = (columnValue) => {
     if (!columnValue) return 0;
-    
     let valStr = "";
-    
-    // 1. Încercăm valoarea brută din JSON (cea mai sigură)
     if (columnValue.value) {
         try {
             const parsed = JSON.parse(columnValue.value);
-            // Caz direct numeric
             if (typeof parsed === 'number') return parsed;
-            // Caz Formula Result
             if (parsed.formula_result !== undefined) return Number(parsed.formula_result);
-            // Caz standard
             if (parsed && parsed.value !== undefined) {
                 if (typeof parsed.value === 'number') return parsed.value;
                 valStr = String(parsed.value);
             }
         } catch(e) {}
     }
-
-    // 2. Fallback la text
     if (!valStr) {
         if (columnValue.display_value) valStr = String(columnValue.display_value);
         else if (columnValue.text) valStr = columnValue.text;
     }
-
     if (!valStr || valStr === "null") return 0;
-
-    // Gestionare numere negative în paranteză (ex: "(100)")
     if (valStr.includes('(') && valStr.includes(')')) {
         valStr = '-' + valStr.replace(/[()]/g, '');
     }
-
-    // Curățare
     let clean = valStr.replace(/[^0-9.,-]/g, '');
     if (!clean) return 0;
-
-    // Detectare format
     if (clean.includes('.') && clean.includes(',')) {
         if (clean.indexOf('.') < clean.indexOf(',')) {
             clean = clean.replace(/\./g, '').replace(',', '.');
@@ -180,12 +168,10 @@ const extractNumericValue = (columnValue) => {
     } else if (clean.includes(',')) {
         clean = clean.replace(',', '.');
     }
-
     const n = parseFloat(clean);
     return isNaN(n) ? 0 : n;
 };
 
-// FIX CRITIC: Returnăm string-uri pentru comparație sigură
 const getPersonIds = (columnValue) => {
     if (!columnValue?.value) return [];
     try {
@@ -205,15 +191,13 @@ const OperationalRowCells = ({ row, showSalesMetrics = false }) => {
     const totalCountLivr = safeVal(row.livr_principalCount) + safeVal(row.livr_secondaryCount);
     const totalProfitEurLivr = safeVal(row.livr_principalProfitEur) + safeVal(row.livr_secondaryProfitEur);
 
-    // TARGET & BONUS
     const target = 0;
     const bonus = totalProfitEurCtr - target;
 
     const qualified = safeVal(row.calificat);
     const contacted = safeVal(row.contactat);
-    const totalLeadsInteractions = qualified + contacted;
-    const rataConversieClienti = totalLeadsInteractions > 0 
-        ? ((qualified / totalLeadsInteractions) * 100).toFixed(1) 
+    const rataConversieClienti = (qualified + contacted) > 0 
+        ? ((qualified / (qualified + contacted)) * 100).toFixed(1) 
         : "0.0";
     
     const solicitari = safeVal(row.solicitariCount);
@@ -243,7 +227,6 @@ const OperationalRowCells = ({ row, showSalesMetrics = false }) => {
 
             <td className="px-2 py-2 text-center text-slate-700 font-medium border-r">{safeVal(row.suppliersAdded)}</td>
             
-            {/* DATA CONTRACT */}
             <td className="px-2 py-2 text-center bg-blue-50/30 text-slate-700">{safeVal(row.ctr_principalCount)}</td>
             <td className="px-2 py-2 text-center bg-blue-50/30">{formatCurrency(safeVal(row.ctr_principalProfitEur))}</td> 
             <td className="px-2 py-2 text-center text-slate-600">{safeVal(row.ctr_secondaryCount)}</td>
@@ -251,7 +234,6 @@ const OperationalRowCells = ({ row, showSalesMetrics = false }) => {
             <td className="px-2 py-2 text-center font-bold bg-blue-100/50">{safeVal(totalCountCtr)}</td>
             <td className="px-2 py-2 text-center font-bold bg-blue-100/50 border-r">{formatCurrency(totalProfitEurCtr)}</td>
             
-            {/* DATA LIVRARE */}
             <td className="px-2 py-2 text-center bg-green-50/30 text-slate-700">{safeVal(row.livr_principalCount)}</td>
             <td className="px-2 py-2 text-center bg-green-50/30">{formatCurrency(safeVal(row.livr_principalProfitEur))}</td>
             <td className="px-2 py-2 text-center text-slate-600">{safeVal(row.livr_secondaryCount)}</td>
@@ -259,7 +241,6 @@ const OperationalRowCells = ({ row, showSalesMetrics = false }) => {
             <td className="px-2 py-2 text-center font-bold bg-green-100/50">{safeVal(totalCountLivr)}</td>
             <td className="px-2 py-2 text-center font-bold bg-green-100/50 border-r">{formatCurrency(totalProfitEurLivr)}</td>
 
-            {/* TARGET & BONUS */}
             <td className="px-2 py-2 text-center text-slate-600 bg-blue-50/30">{formatCurrency(target)}</td>
             <td className="px-2 py-2 text-center font-bold text-green-700 bg-blue-100/50 border-r">{formatCurrency(bonus)}</td>
 
@@ -526,12 +507,6 @@ const TableHeader = ({ showSalesMetrics }) => (
 );
 
 const CompanyTable = ({ stats }) => {
-    // Helper to render breakout rows
-    const renderBreakdownRows = (breakdownObj) => {
-        // ... (not used, keeping for structure if needed later)
-        return null;
-    };
-    
     // Function to calculate %
     const calcPct = (count, total) => total > 0 ? ((count / total) * 100).toFixed(1) + "%" : "0.0%";
     
@@ -848,6 +823,7 @@ export default function App() {
                  const totalCountLivr = (row.livr_principalCount || 0) + (row.livr_secondaryCount || 0);
                  const totalProfitEurLivr = (row.livr_principalProfitEur || 0) + (row.livr_secondaryProfitEur || 0);
                  
+                 // Target & Bonus
                  const target = 0;
                  const bonus = totalProfitEurCtr - target;
 
