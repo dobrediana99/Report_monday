@@ -1,17 +1,12 @@
 import React, { useState } from 'react';
 import { 
   BarChart2, 
-  Briefcase, 
-  Calendar, 
   FileBarChart, 
   AlertCircle, 
   Download,
   ArrowRight,
   ExternalLink,
-  Bug,
-  Activity,
-  Search,
-  Building
+  Bug
 } from 'lucide-react';
 
 // --- CONFIGURARE ---
@@ -46,7 +41,7 @@ const COLS = {
         STATUS_PLATA_CLIENT: "color_mkv5g682",
         PROFITABILITATE: "formula_mkxwd14p",
         
-        // --- COLOANE NOI (Vor fi detectate dinamic daca ID-ul nu e corect) ---
+        // --- COLOANE NOI ---
         CRT: "crt_column_id", 
         DEP: "dep_column_id", 
         IMPLICARE: "implicare_column_id", 
@@ -116,6 +111,7 @@ const DEPARTMENTS = {
     }
 };
 
+// --- HELPER FUNCTIONS ---
 const formatCurrency = (val) => {
     if (typeof val !== 'number' || isNaN(val)) return "0.00";
     return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -227,6 +223,7 @@ const OperationalRowCells = ({ row, showSalesMetrics = false }) => {
 
             <td className="px-2 py-2 text-center text-slate-700 font-medium border-r">{safeVal(row.suppliersAdded)}</td>
             
+            {/* DATA CONTRACT */}
             <td className="px-2 py-2 text-center bg-blue-50/30 text-slate-700">{safeVal(row.ctr_principalCount)}</td>
             <td className="px-2 py-2 text-center bg-blue-50/30">{formatCurrency(safeVal(row.ctr_principalProfitEur))}</td> 
             <td className="px-2 py-2 text-center text-slate-600">{safeVal(row.ctr_secondaryCount)}</td>
@@ -234,6 +231,7 @@ const OperationalRowCells = ({ row, showSalesMetrics = false }) => {
             <td className="px-2 py-2 text-center font-bold bg-blue-100/50">{safeVal(totalCountCtr)}</td>
             <td className="px-2 py-2 text-center font-bold bg-blue-100/50 border-r">{formatCurrency(totalProfitEurCtr)}</td>
             
+            {/* DATA LIVRARE */}
             <td className="px-2 py-2 text-center bg-green-50/30 text-slate-700">{safeVal(row.livr_principalCount)}</td>
             <td className="px-2 py-2 text-center bg-green-50/30">{formatCurrency(safeVal(row.livr_principalProfitEur))}</td>
             <td className="px-2 py-2 text-center text-slate-600">{safeVal(row.livr_secondaryCount)}</td>
@@ -241,6 +239,7 @@ const OperationalRowCells = ({ row, showSalesMetrics = false }) => {
             <td className="px-2 py-2 text-center font-bold bg-green-100/50">{safeVal(totalCountLivr)}</td>
             <td className="px-2 py-2 text-center font-bold bg-green-100/50 border-r">{formatCurrency(totalProfitEurLivr)}</td>
 
+            {/* TARGET & BONUS */}
             <td className="px-2 py-2 text-center text-slate-600 bg-blue-50/30">{formatCurrency(target)}</td>
             <td className="px-2 py-2 text-center font-bold text-green-700 bg-blue-100/50 border-r">{formatCurrency(bonus)}</td>
 
@@ -460,7 +459,7 @@ const TableHeader = ({ showSalesMetrics }) => (
             </th>
 
             <th className="px-2 py-3 text-center bg-blue-50/30 text-blue-900 border-b border-blue-200">Target</th>
-            <th className="px-2 py-3 text-center bg-blue-100/50 text-green-800 border-b border-blue-200 border-r">Bonus</th>
+            <th className="px-2 py-3 text-center bg-blue-100/50 text-green-800 border-b border-blue-200 border-r">Profit peste target</th>
 
             <th className="px-2 py-3 text-center bg-blue-50 text-blue-800">Profitabilitate<br/>%</th>
             <th className="px-2 py-3 text-center">Curse<br/>Web Pr.</th>
@@ -743,723 +742,6 @@ export default function App() {
             return { start: s, end: e };
         }
         return { start, end };
-    };
-
-    const handleGenerate = () => {
-        const range = getDateRange();
-        if (!range || range.start > range.end) {
-            setError("Interval invalid.");
-            return;
-        }
-        fetchMondayData(range);
-    };
-
-    const handleExport = () => {
-        if (!opsStats.length && !salesStats.length && !mgmtStats.length) {
-            setError("Nu există date de exportat.");
-            return;
-        }
-
-        const filename = `Raport_${dateRangeStr.replace(/[^a-zA-Z0-9.-]/g, '_')}.xls`;
-        
-        // --- Helper for creating Breakdown Rows in Excel ---
-        const createBreakdownRowsExcel = (title, fieldKey) => {
-             const ctrData = companyStats.ctr.breakdowns?.[fieldKey] || {};
-             const livrData = companyStats.livr.breakdowns?.[fieldKey] || {};
-             const allKeys = new Set([...Object.keys(ctrData), ...Object.keys(livrData)]);
-             
-             if (allKeys.size === 0) return "";
-             
-             let rows = `<tr style="background-color: #e5e7eb; font-weight:bold;"><td colspan="3">${title}</td></tr>`;
-             
-             const calcPct = (c, t) => t > 0 ? ((c/t)*100).toFixed(1)+"%" : "0.0%";
-
-             [...allKeys].sort().forEach(k => {
-                 rows += `<tr>
-                    <td>${k}</td>
-                    <td style="text-align:right;">${ctrData[k]||0} (${calcPct(ctrData[k]||0, companyStats.ctr.count)})</td>
-                    <td style="text-align:right;">${livrData[k]||0} (${calcPct(livrData[k]||0, companyStats.livr.count)})</td>
-                 </tr>`;
-             });
-             return rows;
-        };
-
-        const style = `
-            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-            <head>
-                <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Raport</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
-                <meta charset="utf-8">
-                <style>
-                    body { font-family: sans-serif; }
-                    table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-                    th, td { border: 1px solid #000000; padding: 5px; text-align: center; font-size: 10pt; mso-number-format:"\@"; }
-                    th { background-color: #f2f2f2; font-weight: bold; }
-                    .bg-blue { background-color: #e3f2fd; }
-                    .bg-green { background-color: #e8f5e9; }
-                    .bg-yellow { background-color: #fef9c3; }
-                    .bg-purple { background-color: #f3e8ff; }
-                    .bg-orange { background-color: #fff7ed; }
-                    .bg-indigo { background-color: #e0e7ff; }
-                    .bold { font-weight: bold; }
-                    .text-left { text-align: left; }
-                    .text-red { color: red; font-weight: bold; }
-                    .text-green { color: green; font-weight: bold; }
-                    h2 { font-size: 14pt; margin-top: 20px; }
-                    tfoot { font-weight: bold; background-color: #f9fafb; border-top: 2px solid #ccc; }
-                </style>
-            </head>
-            <body>
-        `;
-
-        let content = `${style}
-            <h2>Raport Activitate Monday.com</h2>
-            <h3>Interval: ${dateRangeStr}</h3>
-        `;
-
-        const renderTableRows = (stats, isSales) => {
-            const bodyRows = stats.map(row => {
-                 const totalCountCtr = (row.ctr_principalCount || 0) + (row.ctr_secondaryCount || 0);
-                 const totalProfitEurCtr = (row.ctr_principalProfitEur || 0) + (row.ctr_secondaryProfitEur || 0);
-                 const totalCountLivr = (row.livr_principalCount || 0) + (row.livr_secondaryCount || 0);
-                 const totalProfitEurLivr = (row.livr_principalProfitEur || 0) + (row.livr_secondaryProfitEur || 0);
-                 
-                 // Target & Bonus
-                 const target = 0;
-                 const bonus = totalProfitEurCtr - target;
-
-                 const totalLeads = (row.calificat || 0) + (row.contactat || 0);
-                 const rataConversieClienti = totalLeads > 0 ? ((row.calificat / totalLeads) * 100).toFixed(1) : "0.0";
-                 const conversionRateWebsite = row.solicitariCount > 0 ? ((row.websiteCount / row.solicitariCount) * 100).toFixed(1) : (row.websiteCount > 0 ? "100.0" : "0.0");
-                 
-                 const avgClient = row.countClientTerms > 0 ? (row.sumClientTerms / row.countClientTerms).toFixed(1) : "0.0";
-                 const avgSupplier = row.countSupplierTerms > 0 ? (row.sumSupplierTerms / row.countSupplierTerms).toFixed(1) : "0.0";
-                 const avgProfitability = row.countProfitability > 0 ? (row.sumProfitability / row.countProfitability).toFixed(1) : "0.0";
-
-                 let salesCells = '';
-                 if (isSales) {
-                     salesCells = `<td class="bg-yellow">${safeVal(row.contactat)}</td><td class="bg-yellow">${safeVal(row.calificat)}</td><td class="bg-yellow bold">${rataConversieClienti}%</td><td class="bg-indigo">${safeVal(row.emailsCount)}</td><td class="bg-indigo">${safeVal(row.callsCount)}</td>`;
-                 }
-
-                 return `<tr>
-                    <td class="text-left bold">${row.name}</td>
-                    ${salesCells}
-                    <td>${safeVal(row.suppliersAdded)}</td>
-                    
-                    <td class="bg-blue">${safeVal(row.ctr_principalCount)}</td><td class="bg-blue">${formatCurrency(safeVal(row.ctr_principalProfitEur))}</td>
-                    <td>${safeVal(row.ctr_secondaryCount)}</td><td>${formatCurrency(safeVal(row.ctr_secondaryProfitEur))}</td>
-                    <td class="bg-blue bold">${safeVal(totalCountCtr)}</td>
-                    <td class="bg-blue bold">${formatCurrency(totalProfitEurCtr)}</td>
-
-                    <td class="bg-green">${safeVal(row.livr_principalCount)}</td><td class="bg-green">${formatCurrency(safeVal(row.livr_principalProfitEur))}</td>
-                    <td>${safeVal(row.livr_secondaryCount)}</td><td>${formatCurrency(safeVal(row.livr_secondaryProfitEur))}</td>
-                    <td class="bg-green bold">${safeVal(totalCountLivr)}</td>
-                    <td class="bg-green bold border-r">${formatCurrency(totalProfitEurLivr)}</td>
-
-                    <td class="bg-blue">${formatCurrency(target)}</td>
-                    <td class="bg-blue bold text-green border-r">${formatCurrency(bonus)}</td>
-
-                    <td class="bold bg-blue" style="background-color: #e3f2fd;">${avgProfitability}%</td>
-                    
-                    <td>${safeVal(row.websiteCount)}</td><td>${formatCurrency(safeVal(row.websiteProfit))}</td>
-                    <td class="bg-purple/30">${safeVal(row.websiteCountSec)}</td><td class="bg-purple/30 border-r">${formatCurrency(safeVal(row.websiteProfitSec))}</td>
-                    <td class="bg-orange/30 border-r bold">${safeVal(row.burseCount)}</td>
-
-                    <td class="bg-purple">${safeVal(row.solicitariCount)}</td><td class="bold">${conversionRateWebsite}%</td>
-                    
-                    <td>${avgClient}</td><td>${avgSupplier}</td>
-                    <td class="text-red">${row.overdueInvoicesCount}</td>
-                    <td class="bg-orange">${row.supplierTermsUnder30}</td><td class="bg-orange">${row.supplierTermsOver30}</td>
-                 </tr>`;
-            }).join('');
-            
-             const totals = stats.reduce((acc, row) => {
-                acc.contactat += safeVal(row.contactat);
-                acc.calificat += safeVal(row.calificat);
-                acc.emailsCount += safeVal(row.emailsCount);
-                acc.callsCount += safeVal(row.callsCount);
-                acc.suppliersAdded += safeVal(row.suppliersAdded);
-                acc.ctr_principalCount += safeVal(row.ctr_principalCount);
-                acc.ctr_principalProfitEur += safeVal(row.ctr_principalProfitEur);
-                acc.ctr_secondaryCount += safeVal(row.ctr_secondaryCount);
-                acc.ctr_secondaryProfitEur += safeVal(row.ctr_secondaryProfitEur);
-                acc.livr_principalCount += safeVal(row.livr_principalCount);
-                acc.livr_principalProfitEur += safeVal(row.livr_principalProfitEur);
-                acc.livr_secondaryCount += safeVal(row.livr_secondaryCount);
-                acc.livr_secondaryProfitEur += safeVal(row.livr_secondaryProfitEur);
-                acc.websiteCount += safeVal(row.websiteCount);
-                acc.websiteProfit += safeVal(row.websiteProfit);
-                acc.solicitariCount += safeVal(row.solicitariCount);
-                acc.sumClientTerms += safeVal(row.sumClientTerms);
-                acc.countClientTerms += safeVal(row.countClientTerms);
-                acc.sumSupplierTerms += safeVal(row.sumSupplierTerms);
-                acc.countSupplierTerms += safeVal(row.countSupplierTerms);
-                acc.overdueInvoicesCount += safeVal(row.overdueInvoicesCount);
-                acc.sumProfitability += safeVal(row.sumProfitability);
-                acc.countProfitability += safeVal(row.countProfitability);
-                acc.supplierTermsUnder30 += safeVal(row.supplierTermsUnder30);
-                acc.supplierTermsOver30 += safeVal(row.supplierTermsOver30);
-                acc.websiteCountSec += safeVal(row.websiteCountSec);
-                acc.websiteProfitSec += safeVal(row.websiteProfitSec);
-                acc.burseCount += safeVal(row.burseCount);
-                return acc;
-            }, {
-                contactat: 0, calificat: 0, emailsCount: 0, callsCount: 0,
-                suppliersAdded: 0,
-                ctr_principalCount: 0, ctr_principalProfitEur: 0, ctr_secondaryCount: 0, ctr_secondaryProfitEur: 0,
-                livr_principalCount: 0, livr_principalProfitEur: 0, livr_secondaryCount: 0, livr_secondaryProfitEur: 0,
-                websiteCount: 0, websiteProfit: 0, solicitariCount: 0,
-                sumClientTerms: 0, countClientTerms: 0,
-                sumSupplierTerms: 0, countSupplierTerms: 0,
-                overdueInvoicesCount: 0,
-                supplierTermsUnder30: 0, supplierTermsOver30: 0,
-                sumProfitability: 0, countProfitability: 0,
-                websiteCountSec: 0, websiteProfitSec: 0, burseCount: 0
-            });
-            
-            const count = stats.length || 1;
-            const totalCtrCount = totals.ctr_principalCount + totals.ctr_secondaryCount;
-            const totalCtrProfit = totals.ctr_principalProfitEur + totals.ctr_secondaryProfitEur;
-            const totalLivrCount = totals.livr_principalCount + totals.livr_secondaryCount;
-            const totalLivrProfit = totals.livr_principalProfitEur + totals.livr_secondaryProfitEur;
-            const avgProfitability = totals.countProfitability > 0 ? totals.sumProfitability / totals.countProfitability : 0;
-            const avgClientTerm = totals.countClientTerms > 0 ? totals.sumClientTerms / totals.countClientTerms : 0;
-            const avgSupplierTerm = totals.countSupplierTerms > 0 ? totals.sumSupplierTerms / totals.countSupplierTerms : 0;
-            const totalLeads = totals.calificat + totals.contactat;
-            const rateConvClients = totalLeads > 0 ? (totals.calificat / totalLeads) * 100 : 0;
-            const rateConvWeb = totals.solicitariCount > 0 ? (totals.websiteCount / totals.solicitariCount) * 100 : 0;
-            const avg = (val) => val / count;
-            const targetTotal = 0;
-            const bonusTotal = totalCtrProfit - targetTotal;
-            const bonusAvg = bonusTotal / count;
-
-            let footerSales1 = '';
-            let footerSales2 = '';
-
-            if (isSales) {
-                footerSales1 = `<td class="text-center">${totals.contactat}</td><td class="text-center">${totals.calificat}</td><td class="text-center">${formatNumber(rateConvClients)}%</td><td class="text-center">${totals.emailsCount}</td><td class="text-center border-r">${totals.callsCount}</td>`;
-                footerSales2 = `<td class="text-center">${formatNumber(avg(totals.contactat))}</td><td class="text-center">${formatNumber(avg(totals.calificat))}</td><td class="text-center">-</td><td class="text-center">${formatNumber(avg(totals.emailsCount))}</td><td class="text-center border-r">${formatNumber(avg(totals.callsCount))}</td>`;
-            }
-
-            const footer = `
-                <tr style="background-color: #e5e7eb; font-weight: bold;">
-                    <td>TOTAL</td>
-                    ${footerSales1}
-                    <td>${totals.suppliersAdded}</td>
-                    <td>${totals.ctr_principalCount}</td><td>${formatCurrency(totals.ctr_principalProfitEur)}</td>
-                    <td>${totals.ctr_secondaryCount}</td><td>${formatCurrency(totals.ctr_secondaryProfitEur)}</td>
-                    <td>${totalCtrCount}</td><td>${formatCurrency(totalCtrProfit)}</td>
-                    
-                    <td>${totals.livr_principalCount}</td><td>${formatCurrency(totals.livr_principalProfitEur)}</td>
-                    <td>${totals.livr_secondaryCount}</td><td>${formatCurrency(totals.livr_secondaryProfitEur)}</td>
-                    <td>${totalLivrCount}</td><td>${formatCurrency(totalLivrProfit)}</td>
-                    
-                    <td>${formatCurrency(targetTotal)}</td>
-                    <td>${formatCurrency(bonusTotal)}</td>
-
-                    <td>${formatNumber(avgProfitability)}%</td>
-                    <td>${totals.websiteCount}</td><td>${formatCurrency(totals.websiteProfit)}</td>
-                    <td>${totals.websiteCountSec}</td><td>${formatCurrency(totals.websiteProfitSec)}</td>
-                    <td>${totals.burseCount}</td>
-
-                    <td>${totals.solicitariCount}</td><td>${formatNumber(rateConvWeb)}%</td>
-                    
-                    <td>${formatNumber(avgClientTerm)}</td><td>${formatNumber(avgSupplierTerm)}</td>
-                    <td>${totals.overdueInvoicesCount}</td>
-                    <td>${totals.supplierTermsUnder30}</td><td>${totals.supplierTermsOver30}</td>
-                </tr>
-                <tr style="background-color: #e5e7eb; font-style: italic;">
-                    <td>MEDIA</td>
-                    ${footerSales2}
-                    <td>${formatNumber(avg(totals.suppliersAdded))}</td>
-                    <td>${formatNumber(avg(totals.ctr_principalCount))}</td><td>${formatCurrency(avg(totals.ctr_principalProfitEur))}</td>
-                    <td>${formatNumber(avg(totals.ctr_secondaryCount))}</td><td>${formatCurrency(avg(totals.ctr_secondaryProfitEur))}</td>
-                    <td>${formatNumber(avg(totalCtrCount))}</td><td>${formatCurrency(avg(totalCtrProfit))}</td>
-                    
-                    <td>${formatNumber(avg(totals.livr_principalCount))}</td><td>${formatCurrency(avg(totals.livr_principalProfitEur))}</td>
-                    <td>${formatNumber(avg(totals.livr_secondaryCount))}</td><td>${formatCurrency(avg(totals.livr_secondaryProfitEur))}</td>
-                    <td>${formatNumber(avg(totalLivrCount))}</td><td>${formatCurrency(avg(totalLivrProfit))}</td>
-                    
-                    <td>${formatCurrency(0)}</td>
-                    <td>${formatCurrency(bonusAvg)}</td>
-
-                    <td>-</td>
-                    <td>${formatNumber(avg(totals.websiteCount))}</td><td>${formatCurrency(avg(totals.websiteProfit))}</td>
-                    <td>${formatNumber(avg(totals.websiteCountSec))}</td><td>${formatCurrency(avg(totals.websiteProfitSec))}</td>
-                    <td>${formatNumber(avg(totals.burseCount))}</td>
-
-                    <td>${formatNumber(avg(totals.solicitariCount))}</td><td>-</td>
-                    
-                    <td>-</td><td>-</td>
-                    <td>${formatNumber(avg(totals.overdueInvoicesCount))}</td>
-                    <td>${formatNumber(avg(totals.supplierTermsUnder30))}</td><td>${formatNumber(avg(totals.supplierTermsOver30))}</td>
-                </tr>
-            `;
-
-            return bodyRows + footer;
-        };
-        
-        // Add Company Table to Export
-        const companyRows = `
-            <tr style="background-color: #1e293b; color: white; font-weight: bold;"><td colspan="3">TOTAL COMPANIE (GLOBAL)</td></tr>
-            <tr style="background-color: #f3f4f6;"><td>Metrică</td><td style="text-align:right;">După Data Contract</td><td style="text-align:right;">După Data Livrare</td></tr>
-            <tr><td>Număr Total Curse</td><td style="text-align:right;">${companyStats.ctr.count}</td><td style="text-align:right;">${companyStats.livr.count}</td></tr>
-            <tr><td>Profit Total (EUR)</td><td style="text-align:right; font-weight:bold; color:green;">${formatCurrency(companyStats.ctr.profit)}</td><td style="text-align:right; font-weight:bold; color:green;">${formatCurrency(companyStats.livr.profit)}</td></tr>
-            <tr><td>Website / Fix - Curse</td><td style="text-align:right;">${companyStats.ctr.websiteCount}</td><td style="text-align:right;">${companyStats.livr.websiteCount}</td></tr>
-            <tr><td>Website / Fix - Profit</td><td style="text-align:right;">${formatCurrency(companyStats.ctr.websiteProfit)}</td><td style="text-align:right;">${formatCurrency(companyStats.livr.websiteProfit)}</td></tr>
-            <tr><td>Burse - Curse</td><td style="text-align:right;">${companyStats.ctr.burseCount}</td><td style="text-align:right;">${companyStats.livr.burseCount}</td></tr>
-            <tr><td colspan="3"></td></tr>
-            ${createBreakdownRowsExcel("Tip serviciu", "STATUS_CTR")}
-            ${createBreakdownRowsExcel("Dep", "DEP")}
-            ${createBreakdownRowsExcel("Status Plata Client", "STATUS_PLATA_CLIENT")}
-            ${createBreakdownRowsExcel("Moneda Cursa", "MONEDA")}
-            ${createBreakdownRowsExcel("Sursa Client", "SURSA")}
-            ${createBreakdownRowsExcel("Implicare", "IMPLICARE")}
-            ${createBreakdownRowsExcel("Client Pe", "CLIENT_PE")}
-            ${createBreakdownRowsExcel("Furnizor Pe", "FURNIZ_PE")}
-            ${createBreakdownRowsExcel("Client/Furnizor Pe", "CLIENT_FURNIZOR_PE")}
-            ${createBreakdownRowsExcel("Mod Transport", "MOD_TRANSPORT")}
-            ${createBreakdownRowsExcel("Tip Marfa", "TIP_MARFA")}
-            ${createBreakdownRowsExcel("Ocupare Mij Transport", "OCUPARE")}
-        `;
-
-        if (mgmtStats.length) {
-             content += `<h2>Departament Management</h2>
-             <table>
-                <thead>
-                   ${/* Reuse header HTML structure */ ""}
-                    <tr>
-                        <th rowspan="2">Angajat</th>
-                        <th rowspan="2">Furnizori</th>
-                        <th colspan="6" class="bg-blue">După Data Contract</th>
-                        <th colspan="6" class="bg-green">După Data Livrare</th>
-                        <th rowspan="2" class="bg-blue">Target</th>
-                        <th rowspan="2" class="bg-blue">Bonus</th>
-                        <th rowspan="2" class="bg-blue">Profitabilitate<br/>%</th>
-                        <th rowspan="2">Curse<br/>Web Pr.</th>
-                        <th rowspan="2">Profit<br/>Web Pr.</th>
-                        <th rowspan="2">Curse<br/>Web Sec.</th>
-                        <th rowspan="2">Profit<br/>Web Sec.</th>
-                        <th rowspan="2">Curse<br/>Burse</th>
-                        <th rowspan="2" class="bg-purple">Solicitări<br/>Web</th>
-                        <th rowspan="2">Conv. Web<br/>%</th>
-                        <th rowspan="2">Termen Mediu<br/>Plată Client</th>
-                        <th rowspan="2">Termen Mediu<br/>Plată Furnizor</th>
-                        <th rowspan="2" class="text-red">Întârzieri<br/>Client >15</th>
-                        <th rowspan="2" class="bg-orange">Furn.<br/><30</th>
-                        <th rowspan="2" class="bg-orange">Furn.<br/>>=30</th>
-                    </tr>
-                    <tr>
-                        <th class="bg-blue">Curse Pr.</th><th class="bg-blue">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-blue">Total Curse</th><th class="bg-blue">Total Profit</th>
-                        <th class="bg-green">Curse Pr.</th><th class="bg-green">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-green">Total Curse</th><th class="bg-green">Total Profit</th>
-                    </tr>
-                </thead>
-                <tbody>${renderTableRows(mgmtStats, false)}</tbody></table>`;
-        }
-
-        if (opsStats.length) {
-             content += `<h2>Departament Operațiuni</h2>
-             <table>
-                <thead>
-                    <tr>
-                        <th rowspan="2">Angajat</th>
-                        <th rowspan="2">Furnizori</th>
-                        <th colspan="6" class="bg-blue">După Data Contract</th>
-                        <th colspan="6" class="bg-green">După Data Livrare</th>
-                        <th rowspan="2" class="bg-blue">Target</th>
-                        <th rowspan="2" class="bg-blue">Bonus</th>
-                        <th rowspan="2" class="bg-blue">Profitabilitate<br/>%</th>
-                        <th rowspan="2">Curse<br/>Web Pr.</th>
-                        <th rowspan="2">Profit<br/>Web Pr.</th>
-                        <th rowspan="2">Curse<br/>Web Sec.</th>
-                        <th rowspan="2">Profit<br/>Web Sec.</th>
-                        <th rowspan="2">Curse<br/>Burse</th>
-                        <th rowspan="2" class="bg-purple">Solicitări<br/>Web</th>
-                        <th rowspan="2">Conv. Web<br/>%</th>
-                        <th rowspan="2">Termen Mediu<br/>Plată Client</th>
-                        <th rowspan="2">Termen Mediu<br/>Plată Furnizor</th>
-                        <th rowspan="2" class="text-red">Întârzieri<br/>Client >15</th>
-                        <th rowspan="2" class="bg-orange">Furn.<br/><30</th>
-                        <th rowspan="2" class="bg-orange">Furn.<br/>>=30</th>
-                    </tr>
-                    <tr>
-                        <th class="bg-blue">Curse Pr.</th><th class="bg-blue">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-blue">Total Curse</th><th class="bg-blue">Total Profit</th>
-                        <th class="bg-green">Curse Pr.</th><th class="bg-green">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-green">Total Curse</th><th class="bg-green">Total Profit</th>
-                    </tr>
-                </thead>
-                <tbody>${renderTableRows(opsStats, false)}</tbody></table>`;
-        }
-
-        if (salesStats.length) {
-            content += `<h2>Departament Vânzări</h2>
-            <table>
-                <thead>
-                   <tr>
-                        <th rowspan="2">Angajat</th>
-                        <th rowspan="2" class="bg-yellow">Contactați<br/>Tel</th>
-                        <th rowspan="2" class="bg-yellow">Calificați</th>
-                        <th rowspan="2" class="bg-yellow">Rată Conv.<br/>Clienti</th>
-                        <th rowspan="2" class="bg-indigo">Email-uri</th>
-                        <th rowspan="2" class="bg-indigo">Apeluri</th>
-                        <th rowspan="2">Furnizori</th>
-                        <th colspan="6" class="bg-blue">După Data Contract</th>
-                        <th colspan="6" class="bg-green">După Data Livrare</th>
-                        <th rowspan="2" class="bg-blue">Target</th>
-                        <th rowspan="2" class="bg-blue">Bonus</th>
-                        <th rowspan="2" class="bg-blue">Profitabilitate<br/>%</th>
-                        <th rowspan="2">Curse<br/>Web Pr.</th>
-                        <th rowspan="2">Profit<br/>Web Pr.</th>
-                        <th rowspan="2">Curse<br/>Web Sec.</th>
-                        <th rowspan="2">Profit<br/>Web Sec.</th>
-                        <th rowspan="2">Curse<br/>Burse</th>
-                        <th rowspan="2" class="bg-purple">Solicitări<br/>Web</th>
-                        <th rowspan="2">Conv. Web<br/>%</th>
-                        <th rowspan="2">Termen Mediu<br/>Plată Client</th>
-                        <th rowspan="2">Termen Mediu<br/>Plată Furnizor</th>
-                        <th rowspan="2" class="text-red">Întârzieri<br/>Client >15</th>
-                        <th rowspan="2" class="bg-orange">Furn.<br/><30</th>
-                        <th rowspan="2" class="bg-orange">Furn.<br/>>=30</th>
-                    </tr>
-                    <tr>
-                        <th class="bg-blue">Curse Pr.</th><th class="bg-blue">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-blue">Total Curse</th><th class="bg-blue">Total Profit</th>
-                        <th class="bg-green">Curse Pr.</th><th class="bg-green">Profit Pr.</th><th>Curse Sec.</th><th>Profit Sec.</th><th class="bg-green">Total Curse</th><th class="bg-green">Total Profit</th>
-                    </tr>
-                </thead>
-                <tbody>${renderTableRows(salesStats, true)}</tbody></table>`;
-        }
-
-        content += `<table>${companyRows}</table></body></html>`;
-
-        const blob = new Blob([content], { type: 'application/vnd.ms-excel' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
-
-    const fetchAllItems = async (boardId, colIdsArray, rulesString = null) => {
-        let allItems = [];
-        let cursor = null;
-        let hasMore = true;
-        
-        const colsString = colIdsArray.map(c => `"${c}"`).join(", ");
-
-        while (hasMore) {
-            let args = "";
-            if (cursor) {
-                args = `limit: 250, cursor: "${cursor}"`;
-            } else {
-                args = `limit: 250`;
-                if (rulesString) {
-                    args += `, query_params: { rules: ${rulesString} }`;
-                }
-            }
-
-            const query = `query {
-                boards (ids: [${boardId}]) {
-                    items_page (${args}) {
-                        cursor
-                        items {
-                            id
-                            name
-                            column_values(ids: [${colsString}]) {
-                                id
-                                text
-                                value
-                                type
-                                ... on FormulaValue { display_value }
-                            }
-                        }
-                    }
-                }
-            }`;
-
-            let attempts = 0;
-            let success = false;
-            let json;
-            
-            while(attempts < 3 && !success) {
-                try {
-                    const response = await fetch("https://api.monday.com/v2", {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': API_KEY
-                        },
-                        body: JSON.stringify({ query })
-                    });
-                    
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                    json = await response.json();
-                    success = true;
-                } catch(e) {
-                    attempts++;
-                    console.warn(`Attempt ${attempts} failed for board ${boardId}:`, e);
-                    if(attempts >= 3) throw e;
-                    await new Promise(r => setTimeout(r, 1000 * attempts));
-                }
-            }
-
-            if (json.errors) throw new Error(json.errors[0].message);
-            
-            const data = json.data?.boards?.[0]?.items_page;
-            if (!data) break;
-
-            allItems = [...allItems, ...data.items];
-            cursor = data.cursor;
-            
-            if (!cursor) hasMore = false;
-        }
-        
-        return { items_page: { items: allItems } };
-    };
-    
-    // LIGHTWEIGHT DIRECTORY FETCH
-    const fetchItemsDirectory = async (boardId, ownerColId, rulesString = null) => {
-        let allItems = [];
-        let cursor = null;
-        let hasMore = true;
-
-        while (hasMore) {
-            let args = "";
-            if (cursor) {
-                args = `limit: 500, cursor: "${cursor}"`;
-            } else {
-                args = `limit: 500`;
-                if (rulesString) {
-                    args += `, query_params: { rules: ${rulesString} }`;
-                }
-            }
-            
-            const query = `query {
-                boards (ids: [${boardId}]) {
-                    items_page (${args}) {
-                        cursor
-                        items {
-                            id
-                            column_values(ids: ["${ownerColId}"]) {
-                                id
-                                value
-                            }
-                        }
-                    }
-                }
-            }`;
-            
-            try {
-                const res = await fetch("https://api.monday.com/v2", {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/json', 'Authorization': API_KEY },
-                     body: JSON.stringify({ query })
-                });
-                const json = await res.json();
-                const data = json.data?.boards?.[0]?.items_page;
-                
-                if (data?.items) allItems.push(...data.items);
-                cursor = data?.cursor;
-                if (!cursor) hasMore = false;
-            } catch(e) {
-                console.error("Directory fetch error:", e);
-                hasMore = false;
-            }
-        }
-        return { items_page: { items: allItems } };
-    };
-    
-    const fetchColumns = async (boardId) => {
-        const query = `query {
-            boards (ids: [${boardId}]) {
-                columns { id title type }
-            }
-        }`;
-        const response = await fetch("https://api.monday.com/v2", {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': API_KEY },
-            body: JSON.stringify({ query })
-        });
-        const json = await response.json();
-        return json.data?.boards?.[0]?.columns || [];
-    };
-
-    // NEW: Fetch Activities specifically (Timeline query optimization)
-    const fetchActivitiesForItems = async (itemIds, start, end) => {
-        // We chunk itemIds to avoid massive queries
-        const CHUNK_SIZE = 15; // Increased for speed
-        const results = [];
-        
-        // Convert dates to timestamps for easy comparison
-        const startTime = start.getTime();
-        const endTime = end.getTime();
-        
-        for (let i = 0; i < itemIds.length; i += CHUNK_SIZE) {
-            const chunk = itemIds.slice(i, i + CHUNK_SIZE);
-            const queryBody = chunk.map((id, idx) => `
-                t_${id}: timeline(id: ${id}) {
-                    timeline_items_page {
-                        timeline_items {
-                            type
-                            created_at
-                            user { id }
-                        }
-                    }
-                }
-            `).join('\n');
-            
-            const query = `query { ${queryBody} }`;
-            
-            try {
-                const response = await fetch("https://api.monday.com/v2", {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': API_KEY },
-                    body: JSON.stringify({ query })
-                });
-                const json = await response.json();
-                if (json.data) {
-                     Object.values(json.data).forEach(tData => {
-                         if (tData?.timeline_items_page?.timeline_items) {
-                             results.push(...tData.timeline_items_page.timeline_items);
-                         }
-                     });
-                }
-            } catch(e) {
-                console.warn("Error fetching activities chunk:", e);
-            }
-        }
-        
-        return results.filter(item => {
-            const itemTime = new Date(item.created_at).getTime();
-            return itemTime >= startTime && itemTime <= endTime;
-        });
-    };
-
-    const fetchMondayData = async ({ start, end }) => {
-        setLoading(true);
-        setStatusMessage("Se preiau datele din board-uri...");
-        setError(null);
-        setOpsStats([]);
-        setSalesStats([]);
-        setMgmtStats([]); // Reset management stats
-        setCompanyStats({ 
-            ctr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} }, 
-            livr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} } 
-        });
-
-        try {
-            const dateFrom = formatDateISO(start);
-            const dateTo = formatDateISO(end);
-            
-            const salesUserIds = new Set(DEPARTMENTS.sales.employees.map(e => String(e.mondayUserId)));
-
-            const isOwnedBySales = (item, ownerColId) => {
-                const col = item.column_values.find(c => c.id === ownerColId);
-                const ids = getPersonIds(col);
-                return ids.some(id => salesUserIds.has(String(id)));
-            };
-
-            const furnizoriCols = await fetchColumns(BOARD_ID_FURNIZORI);
-            const contacteCols = await fetchColumns(BOARD_ID_CONTACTE);
-
-            const furnDateCol = furnizoriCols.find(c => c.type === 'date' || c.title.toLowerCase().includes('data'))?.id || "date4";
-            const furnPersonCol = furnizoriCols.find(c => c.type === 'people' || c.title.toLowerCase().includes('owner') || c.title.toLowerCase().includes('persoana'))?.id || "person";
-            const contactOwnerCol = COLS.CONTACTE.OWNER; 
-
-            // FETCH COLS FOR COMENZI TO FIND ALL DYNAMIC COLUMNS
-            const comenziCols = await fetchColumns(BOARD_ID_COMENZI);
-            
-            // DYNAMIC FINDER HELPER
-            const findColId = (searchTitle, defaultId) => {
-                return comenziCols.find(c => c.title.toLowerCase().trim() === searchTitle.toLowerCase().trim() || c.title.toLowerCase().includes(searchTitle.toLowerCase()))?.id || defaultId;
-            };
-
-            COLS.COMENZI.SURSA = findColId("Sursa", COLS.COMENZI.SURSA);
-            COLS.COMENZI.CRT = findColId("Crt", "crt");
-            COLS.COMENZI.DEP = findColId("Dep", "dep");
-            COLS.COMENZI.IMPLICARE = findColId("Implicare", "implicare");
-            COLS.COMENZI.CLIENT_FURNIZOR_PE = findColId("Client/Furnizor Pe", "client_furnizor");
-            COLS.COMENZI.MOD_TRANSPORT = findColId("Mod Transport", "mod_transport");
-            COLS.COMENZI.TIP_MARFA = findColId("Tip Marfa", "tip_marfa");
-            COLS.COMENZI.OCUPARE = findColId("Ocupare", "ocupare");
-
-            // Console log to debug detections
-            console.log("Detected Columns:", COLS.COMENZI);
-
-
-            const comenziCtr = await fetchAllItems(
-                BOARD_ID_COMENZI,
-                Object.values(COLS.COMENZI),
-                `[{ column_id: "${COLS.COMENZI.DATA_CTR}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
-            );
-
-            const comenziLivr = await fetchAllItems(
-                BOARD_ID_COMENZI,
-                Object.values(COLS.COMENZI),
-                `[{ column_id: "${COLS.COMENZI.DATA_LIVRARE}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
-            );
-
-            const solicitari = await fetchAllItems(
-                BOARD_ID_SOLICITARI,
-                Object.values(COLS.SOLICITARI),
-                `[{ column_id: "${COLS.SOLICITARI.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
-            );
-
-            // Use discovered IDs for Furnizori
-            const furnizori = await fetchAllItems(
-                BOARD_ID_FURNIZORI,
-                [furnDateCol, furnPersonCol],
-                `[{ column_id: "${furnDateCol}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
-            );
-
-            const leadsContact = await fetchAllItems(
-                BOARD_ID_LEADS,
-                Object.values(COLS.LEADS),
-                `[{ column_id: "${COLS.LEADS.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }, { column_id: "${COLS.LEADS.STATUS}", operator: any_of, compare_value: [14] }]`
-            );
-
-            const leadsQualified = await fetchAllItems(
-                BOARD_ID_LEADS,
-                Object.values(COLS.LEADS),
-                `[{ column_id: "${COLS.LEADS.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }, { column_id: "${COLS.LEADS.STATUS}", operator: any_of, compare_value: [103] }]`
-            );
-            
-            // --- OPTIMIZED ACTIVITIES FETCH VIA CLIENT-SIDE FILTER ---
-            setStatusMessage("Se scanează itemii pentru activități (Filtrare Client-Side)...");
-            
-            // 1. Fetch Lightweight Directories - FILTERED BY DATE ON SERVER
-            const rawLeads = await fetchItemsDirectory(
-                BOARD_ID_LEADS, 
-                COLS.LEADS.OWNER,
-                `[{ column_id: "${COLS.LEADS.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
-            );
-            
-            const rawContacts = await fetchItemsDirectory(
-                BOARD_ID_CONTACTE, 
-                contactOwnerCol,
-                `[{ column_id: "${COLS.CONTACTE.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
-            );
-
-            // 2. Filter Client-Side (Double check for Owner)
-            const relevantLeads = rawLeads.items_page.items.filter(i => isOwnedBySales(i, COLS.LEADS.OWNER));
-            const relevantContacts = rawContacts.items_page.items.filter(i => isOwnedBySales(i, contactOwnerCol));
-            
-            const allActivityItemIds = [...relevantLeads, ...relevantContacts].map(i => i.id);
-            
-            let activities = [];
-            if (allActivityItemIds.length > 0) {
-                setStatusMessage(`Se descarcă activități pentru ${allActivityItemIds.length} itemi...`);
-                activities = await fetchActivitiesForItems(allActivityItemIds, start, end);
-            }
-            
-            setStatusMessage("Se finalizează calculele...");
-            processAllData({ comenziCtr, comenziLivr, solicitari, leadsContact, leadsQualified, furnizori, activities, start, end, dynamicCols: { furnDateCol, furnPersonCol } });
-
-        } catch (err) {
-            console.error(err);
-            setError("Eroare la preluarea datelor: " + err.message);
-        } finally {
-            setLoading(false);
-            setStatusMessage("");
-        }
     };
 
     const processAllData = ({ comenziCtr, comenziLivr, solicitari, leadsContact, leadsQualified, furnizori, activities, start, end, dynamicCols }) => {
@@ -1823,6 +1105,714 @@ export default function App() {
         setSalesStats(salesStatsLocal);
         setMgmtStats(mgmtStatsLocal);
         setCompanyStats(companyStatsLocal);
+    };
+
+    const fetchColumns = async (boardId) => {
+        const query = `query {
+            boards (ids: [${boardId}]) {
+                columns { id title type }
+            }
+        }`;
+        const response = await fetch("https://api.monday.com/v2", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': API_KEY },
+            body: JSON.stringify({ query })
+        });
+        const json = await response.json();
+        return json.data?.boards?.[0]?.columns || [];
+    };
+
+    // NEW: Fetch Activities specifically (Timeline query optimization)
+    const fetchActivitiesForItems = async (itemIds, start, end) => {
+        // We chunk itemIds to avoid massive queries
+        const CHUNK_SIZE = 15; // Increased for speed
+        const results = [];
+        
+        // Convert dates to timestamps for easy comparison
+        const startTime = start.getTime();
+        const endTime = end.getTime();
+        
+        for (let i = 0; i < itemIds.length; i += CHUNK_SIZE) {
+            const chunk = itemIds.slice(i, i + CHUNK_SIZE);
+            const queryBody = chunk.map((id, idx) => `
+                t_${id}: timeline(id: ${id}) {
+                    timeline_items_page {
+                        timeline_items {
+                            type
+                            created_at
+                            user { id }
+                        }
+                    }
+                }
+            `).join('\n');
+            
+            const query = `query { ${queryBody} }`;
+            
+            try {
+                const response = await fetch("https://api.monday.com/v2", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': API_KEY },
+                    body: JSON.stringify({ query })
+                });
+                const json = await response.json();
+                if (json.data) {
+                     Object.values(json.data).forEach(tData => {
+                         if (tData?.timeline_items_page?.timeline_items) {
+                             results.push(...tData.timeline_items_page.timeline_items);
+                         }
+                     });
+                }
+            } catch(e) {
+                console.warn("Error fetching activities chunk:", e);
+            }
+        }
+        
+        return results.filter(item => {
+            const itemTime = new Date(item.created_at).getTime();
+            return itemTime >= startTime && itemTime <= endTime;
+        });
+    };
+
+    const fetchAllItems = async (boardId, colIdsArray, rulesString = null) => {
+        let allItems = [];
+        let cursor = null;
+        let hasMore = true;
+        
+        const colsString = colIdsArray.map(c => `"${c}"`).join(", ");
+
+        while (hasMore) {
+            let args = "";
+            if (cursor) {
+                args = `limit: 250, cursor: "${cursor}"`;
+            } else {
+                args = `limit: 250`;
+                if (rulesString) {
+                    args += `, query_params: { rules: ${rulesString} }`;
+                }
+            }
+
+            const query = `query {
+                boards (ids: [${boardId}]) {
+                    items_page (${args}) {
+                        cursor
+                        items {
+                            id
+                            name
+                            column_values(ids: [${colsString}]) {
+                                id
+                                text
+                                value
+                                type
+                                ... on FormulaValue { display_value }
+                            }
+                        }
+                    }
+                }
+            }`;
+
+            let attempts = 0;
+            let success = false;
+            let json;
+            
+            while(attempts < 3 && !success) {
+                try {
+                    const response = await fetch("https://api.monday.com/v2", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': API_KEY
+                        },
+                        body: JSON.stringify({ query })
+                    });
+                    
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    json = await response.json();
+                    success = true;
+                } catch(e) {
+                    attempts++;
+                    console.warn(`Attempt ${attempts} failed for board ${boardId}:`, e);
+                    if(attempts >= 3) throw e;
+                    await new Promise(r => setTimeout(r, 1000 * attempts));
+                }
+            }
+
+            if (json.errors) throw new Error(json.errors[0].message);
+            
+            const data = json.data?.boards?.[0]?.items_page;
+            if (!data) break;
+
+            allItems = [...allItems, ...data.items];
+            cursor = data.cursor;
+            
+            if (!cursor) hasMore = false;
+        }
+        
+        return { items_page: { items: allItems } };
+    };
+
+    const fetchItemsDirectory = async (boardId, ownerColId, rulesString = null) => {
+        let allItems = [];
+        let cursor = null;
+        let hasMore = true;
+
+        while (hasMore) {
+            let args = "";
+            if (cursor) {
+                args = `limit: 500, cursor: "${cursor}"`;
+            } else {
+                args = `limit: 500`;
+                if (rulesString) {
+                    args += `, query_params: { rules: ${rulesString} }`;
+                }
+            }
+            
+            const query = `query {
+                boards (ids: [${boardId}]) {
+                    items_page (${args}) {
+                        cursor
+                        items {
+                            id
+                            column_values(ids: ["${ownerColId}"]) {
+                                id
+                                value
+                            }
+                        }
+                    }
+                }
+            }`;
+            
+            try {
+                const res = await fetch("https://api.monday.com/v2", {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json', 'Authorization': API_KEY },
+                     body: JSON.stringify({ query })
+                });
+                const json = await res.json();
+                const data = json.data?.boards?.[0]?.items_page;
+                
+                if (data?.items) allItems.push(...data.items);
+                cursor = data?.cursor;
+                if (!cursor) hasMore = false;
+            } catch(e) {
+                console.error("Directory fetch error:", e);
+                hasMore = false;
+            }
+        }
+        return { items_page: { items: allItems } };
+    };
+
+    const fetchMondayData = async ({ start, end }) => {
+        setLoading(true);
+        setStatusMessage("Se preiau datele din board-uri...");
+        setError(null);
+        setOpsStats([]);
+        setSalesStats([]);
+        setMgmtStats([]); // Reset management stats
+        setCompanyStats({ 
+            ctr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} }, 
+            livr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} } 
+        });
+
+        try {
+            const dateFrom = formatDateISO(start);
+            const dateTo = formatDateISO(end);
+            
+            const salesUserIds = new Set(DEPARTMENTS.sales.employees.map(e => String(e.mondayUserId)));
+
+            const isOwnedBySales = (item, ownerColId) => {
+                const col = item.column_values.find(c => c.id === ownerColId);
+                const ids = getPersonIds(col);
+                return ids.some(id => salesUserIds.has(String(id)));
+            };
+
+            const furnizoriCols = await fetchColumns(BOARD_ID_FURNIZORI);
+            const contacteCols = await fetchColumns(BOARD_ID_CONTACTE);
+
+            const furnDateCol = furnizoriCols.find(c => c.type === 'date' || c.title.toLowerCase().includes('data'))?.id || "date4";
+            const furnPersonCol = furnizoriCols.find(c => c.type === 'people' || c.title.toLowerCase().includes('owner') || c.title.toLowerCase().includes('persoana'))?.id || "person";
+            const contactOwnerCol = COLS.CONTACTE.OWNER; 
+
+            // FETCH COLS FOR COMENZI TO FIND ALL DYNAMIC COLUMNS
+            const comenziCols = await fetchColumns(BOARD_ID_COMENZI);
+            
+            // DYNAMIC FINDER HELPER
+            const findColId = (searchTitle, defaultId) => {
+                return comenziCols.find(c => c.title.toLowerCase().trim() === searchTitle.toLowerCase().trim() || c.title.toLowerCase().includes(searchTitle.toLowerCase()))?.id || defaultId;
+            };
+
+            COLS.COMENZI.SURSA = findColId("Sursa", COLS.COMENZI.SURSA);
+            COLS.COMENZI.CRT = findColId("Crt", "crt");
+            COLS.COMENZI.DEP = findColId("Dep", "dep");
+            COLS.COMENZI.IMPLICARE = findColId("Implicare", "implicare");
+            COLS.COMENZI.CLIENT_FURNIZOR_PE = findColId("Client/Furnizor Pe", "client_furnizor");
+            COLS.COMENZI.MOD_TRANSPORT = findColId("Mod Transport", "mod_transport");
+            COLS.COMENZI.TIP_MARFA = findColId("Tip Marfa", "tip_marfa");
+            COLS.COMENZI.OCUPARE = findColId("Ocupare", "ocupare");
+
+            const comenziCtr = await fetchAllItems(
+                BOARD_ID_COMENZI,
+                Object.values(COLS.COMENZI),
+                `[{ column_id: "${COLS.COMENZI.DATA_CTR}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
+            );
+
+            const comenziLivr = await fetchAllItems(
+                BOARD_ID_COMENZI,
+                Object.values(COLS.COMENZI),
+                `[{ column_id: "${COLS.COMENZI.DATA_LIVRARE}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
+            );
+
+            const solicitari = await fetchAllItems(
+                BOARD_ID_SOLICITARI,
+                Object.values(COLS.SOLICITARI),
+                `[{ column_id: "${COLS.SOLICITARI.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
+            );
+
+            // Use discovered IDs for Furnizori
+            const furnizori = await fetchAllItems(
+                BOARD_ID_FURNIZORI,
+                [furnDateCol, furnPersonCol],
+                `[{ column_id: "${furnDateCol}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
+            );
+
+            const leadsContact = await fetchAllItems(
+                BOARD_ID_LEADS,
+                Object.values(COLS.LEADS),
+                `[{ column_id: "${COLS.LEADS.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }, { column_id: "${COLS.LEADS.STATUS}", operator: any_of, compare_value: [14] }]`
+            );
+
+            const leadsQualified = await fetchAllItems(
+                BOARD_ID_LEADS,
+                Object.values(COLS.LEADS),
+                `[{ column_id: "${COLS.LEADS.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }, { column_id: "${COLS.LEADS.STATUS}", operator: any_of, compare_value: [103] }]`
+            );
+            
+            // --- OPTIMIZED ACTIVITIES FETCH VIA CLIENT-SIDE FILTER ---
+            setStatusMessage("Se scanează itemii pentru activități (Filtrare Client-Side)...");
+            
+            // 1. Fetch Lightweight Directories - FILTERED BY DATE ON SERVER
+            const rawLeads = await fetchItemsDirectory(
+                BOARD_ID_LEADS, 
+                COLS.LEADS.OWNER,
+                `[{ column_id: "${COLS.LEADS.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
+            );
+            
+            const rawContacts = await fetchItemsDirectory(
+                BOARD_ID_CONTACTE, 
+                contactOwnerCol,
+                `[{ column_id: "${COLS.CONTACTE.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
+            );
+
+            // 2. Filter Client-Side (Double check for Owner)
+            const relevantLeads = rawLeads.items_page.items.filter(i => isOwnedBySales(i, COLS.LEADS.OWNER));
+            const relevantContacts = rawContacts.items_page.items.filter(i => isOwnedBySales(i, contactOwnerCol));
+            
+            const allActivityItemIds = [...relevantLeads, ...relevantContacts].map(i => i.id);
+            
+            let activities = [];
+            if (allActivityItemIds.length > 0) {
+                setStatusMessage(`Se descarcă activități pentru ${allActivityItemIds.length} itemi...`);
+                activities = await fetchActivitiesForItems(allActivityItemIds, start, end);
+            }
+            
+            setStatusMessage("Se finalizează calculele...");
+            processAllData({ comenziCtr, comenziLivr, solicitari, leadsContact, leadsQualified, furnizori, activities, start, end, dynamicCols: { furnDateCol, furnPersonCol } });
+
+        } catch (err) {
+            console.error(err);
+            setError("Eroare la preluarea datelor: " + err.message);
+        } finally {
+            setLoading(false);
+            setStatusMessage("");
+        }
+    };
+
+    const handleGenerate = () => {
+        const range = getDateRange();
+        if (!range || range.start > range.end) {
+            setError("Interval invalid.");
+            return;
+        }
+        fetchMondayData(range);
+    };
+
+    const handleExport = () => {
+        if (!opsStats.length && !salesStats.length && !mgmtStats.length) {
+            setError("Nu există date de exportat.");
+            return;
+        }
+
+        const filename = `Raport_${dateRangeStr.replace(/[^a-zA-Z0-9.-]/g, '_')}.xlsx`;
+        
+        // Load ExcelJS from CDN
+        if (!window.ExcelJS) {
+            const script = document.createElement('script');
+            script.src = "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js";
+            script.onload = () => generateExcel();
+            document.body.appendChild(script);
+        } else {
+            generateExcel();
+        }
+
+        const generateExcel = async () => {
+            const workbook = new window.ExcelJS.Workbook();
+            const sheet = workbook.addWorksheet('Raport');
+            let currentRow = 1;
+
+            // Styles
+            const thinBorder = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+            const fontBold = { bold: true };
+            const alignCenter = { vertical: 'middle', horizontal: 'center' };
+            const alignLeft = { vertical: 'middle', horizontal: 'left' };
+            const fillStyle = (color) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + color } });
+
+            // 1. DEPARTMENT TABLES
+            const addDepartmentTable = (title, data, isSales) => {
+                // Title
+                const titleRow = sheet.getRow(currentRow);
+                titleRow.getCell(1).value = title;
+                titleRow.getCell(1).font = { size: 14, bold: true };
+                currentRow += 2;
+
+                const startRow = currentRow;
+                let col = 1;
+
+                // Headers Row 1
+                // ANGAJAT
+                sheet.mergeCells(startRow, col, startRow + 1, col);
+                let cell = sheet.getCell(startRow, col);
+                cell.value = 'ANGAJAT';
+                cell.fill = fillStyle('F2F2F2');
+                cell.border = thinBorder;
+                cell.font = fontBold;
+                cell.alignment = alignCenter;
+                col++;
+
+                // SALES Metrics
+                if (isSales) {
+                    const salesHeaders = ['CONTACTATI', 'CALIFICATI', 'RATA CONV.', 'EMAILS', 'APELURI'];
+                    const salesColors = ['FEF9C3', 'FEF9C3', 'FEF9C3', 'E0E7FF', 'E0E7FF'];
+                    salesHeaders.forEach((h, i) => {
+                        sheet.mergeCells(startRow, col, startRow + 1, col);
+                        cell = sheet.getCell(startRow, col);
+                        cell.value = h;
+                        cell.fill = fillStyle(salesColors[i]);
+                        cell.border = thinBorder;
+                        cell.alignment = alignCenter;
+                        col++;
+                    });
+                }
+
+                // FURNIZORI
+                sheet.mergeCells(startRow, col, startRow + 1, col);
+                cell = sheet.getCell(startRow, col);
+                cell.value = 'FURNIZORI';
+                cell.border = thinBorder;
+                cell.alignment = alignCenter;
+                col++;
+
+                // CONTRACT (6 cols)
+                sheet.mergeCells(startRow, col, startRow, col + 5);
+                cell = sheet.getCell(startRow, col);
+                cell.value = 'DUPĂ DATA CONTRACT';
+                cell.fill = fillStyle('E3F2FD');
+                cell.border = thinBorder;
+                cell.font = fontBold;
+                cell.alignment = alignCenter;
+                
+                ['Curse Pr.', 'Profit Pr.', 'Curse Sec.', 'Profit Sec.', 'Total Curse', 'Total Profit'].forEach((h, i) => {
+                    const c = sheet.getCell(startRow + 1, col + i);
+                    c.value = h;
+                    c.fill = fillStyle('E3F2FD');
+                    c.border = thinBorder;
+                    c.alignment = alignCenter;
+                });
+                col += 6;
+
+                // LIVRARE (6 cols)
+                sheet.mergeCells(startRow, col, startRow, col + 5);
+                cell = sheet.getCell(startRow, col);
+                cell.value = 'DUPĂ DATA LIVRARE';
+                cell.fill = fillStyle('E8F5E9');
+                cell.border = thinBorder;
+                cell.font = fontBold;
+                cell.alignment = alignCenter;
+
+                ['Curse Pr.', 'Profit Pr.', 'Curse Sec.', 'Profit Sec.', 'Total Curse', 'Total Profit'].forEach((h, i) => {
+                    const c = sheet.getCell(startRow + 1, col + i);
+                    c.value = h;
+                    c.fill = fillStyle('E8F5E9');
+                    c.border = thinBorder;
+                    c.alignment = alignCenter;
+                });
+                col += 6;
+
+                // TARGET & BONUS
+                sheet.mergeCells(startRow, col, startRow + 1, col);
+                cell = sheet.getCell(startRow, col);
+                cell.value = 'TARGET';
+                cell.fill = fillStyle('E3F2FD');
+                cell.border = thinBorder;
+                cell.alignment = alignCenter;
+                col++;
+
+                sheet.mergeCells(startRow, col, startRow + 1, col);
+                cell = sheet.getCell(startRow, col);
+                cell.value = 'PROFIT PESTE TARGET';
+                cell.fill = fillStyle('E3F2FD');
+                cell.border = thinBorder;
+                cell.alignment = alignCenter;
+                col++;
+
+                // OTHER METRICS
+                const others = [
+                    { t: 'PROFITABILITATE %', c: 'E3F2FD' },
+                    { t: 'CURSE WEB PR.', c: 'FFFFFF' },
+                    { t: 'PROFIT WEB PR.', c: 'FFFFFF' },
+                    { t: 'CURSE WEB SEC.', c: 'F3E8FF' },
+                    { t: 'PROFIT WEB SEC.', c: 'F3E8FF' },
+                    { t: 'CURSE BURSE', c: 'FFF7ED' },
+                    { t: 'SOLICITĂRI WEB', c: 'F3E8FF' },
+                    { t: 'CONV WEB %', c: 'FFFFFF' },
+                    { t: 'TERMEN CLIENT', c: 'FFFFFF' },
+                    { t: 'TERMEN FURNIZOR', c: 'FFFFFF' },
+                    { t: 'INTARZIERI >15', c: 'FFFFFF', color: 'FFFF0000' },
+                    { t: 'FURN <30', c: 'FFF7ED' },
+                    { t: 'FURN >=30', c: 'FFF7ED' }
+                ];
+
+                others.forEach(o => {
+                    sheet.mergeCells(startRow, col, startRow + 1, col);
+                    cell = sheet.getCell(startRow, col);
+                    cell.value = o.t;
+                    cell.fill = fillStyle(o.c);
+                    cell.border = thinBorder;
+                    cell.alignment = alignCenter;
+                    if(o.color) cell.font = { color: { argb: o.color }, bold: true };
+                    col++;
+                });
+
+                currentRow += 2;
+
+                // DATA ROWS Logic (replicate OperationalRowCells)
+                data.forEach(item => {
+                    const row = sheet.getRow(currentRow);
+                    let c = 1;
+                    
+                    // Values calculation
+                    const totalCountCtr = safeVal(item.ctr_principalCount) + safeVal(item.ctr_secondaryCount);
+                    const totalProfitEurCtr = safeVal(item.ctr_principalProfitEur) + safeVal(item.ctr_secondaryProfitEur);
+                    const totalCountLivr = safeVal(item.livr_principalCount) + safeVal(item.livr_secondaryCount);
+                    const totalProfitEurLivr = safeVal(item.livr_principalProfitEur) + safeVal(item.livr_secondaryProfitEur);
+                    const target = 0;
+                    const bonus = totalProfitEurCtr - target;
+                    const qualified = safeVal(item.calificat);
+                    const contacted = safeVal(item.contactat);
+                    const rataConversie = (qualified + contacted) > 0 ? ((qualified / (qualified + contacted)) * 100).toFixed(1) : "0.0";
+                    const solicitari = safeVal(item.solicitariCount);
+                    const websiteCount = safeVal(item.websiteCount);
+                    const convWeb = solicitari > 0 ? ((websiteCount / solicitari) * 100).toFixed(1) : (websiteCount > 0 ? "100.0" : "0.0");
+                    const avgClientTerm = item.countClientTerms > 0 ? (item.sumClientTerms / item.countClientTerms) : 0;
+                    const avgSupplierTerm = item.countSupplierTerms > 0 ? (item.sumSupplierTerms / item.countSupplierTerms) : 0;
+                    const avgProfitability = item.countProfitability > 0 ? (item.sumProfitability / item.countProfitability) : 0;
+
+                    // Write Cells
+                    // Name
+                    row.getCell(c).value = item.name;
+                    row.getCell(c).border = thinBorder;
+                    c++;
+
+                    // Sales
+                    if (isSales) {
+                        [contacted, qualified, rataConversie + '%', safeVal(item.emailsCount), safeVal(item.callsCount)].forEach((v, i) => {
+                             const cell = row.getCell(c++);
+                             cell.value = v;
+                             cell.border = thinBorder;
+                             cell.alignment = alignCenter;
+                             if(i < 3) cell.fill = fillStyle('FEF9C3');
+                             else cell.fill = fillStyle('E0E7FF');
+                        });
+                    }
+
+                    // Furnizori
+                    row.getCell(c).value = safeVal(item.suppliersAdded);
+                    row.getCell(c).border = thinBorder;
+                    row.getCell(c).alignment = alignCenter;
+                    c++;
+
+                    // Contract
+                    [safeVal(item.ctr_principalCount), safeVal(item.ctr_principalProfitEur), safeVal(item.ctr_secondaryCount), safeVal(item.ctr_secondaryProfitEur), totalCountCtr, totalProfitEurCtr].forEach((v, i) => {
+                        const cell = row.getCell(c++);
+                        cell.value = v;
+                        cell.border = thinBorder;
+                        cell.alignment = alignCenter;
+                        if(i < 2) cell.fill = fillStyle('E3F2FD');
+                        if(i === 1 || i === 3 || i === 5) cell.numFmt = '#,##0.00';
+                        if(i >= 4) cell.font = fontBold;
+                    });
+
+                    // Livrare
+                    [safeVal(item.livr_principalCount), safeVal(item.livr_principalProfitEur), safeVal(item.livr_secondaryCount), safeVal(item.livr_secondaryProfitEur), totalCountLivr, totalProfitEurLivr].forEach((v, i) => {
+                        const cell = row.getCell(c++);
+                        cell.value = v;
+                        cell.border = thinBorder;
+                        cell.alignment = alignCenter;
+                        if(i < 2) cell.fill = fillStyle('E8F5E9');
+                        if(i === 1 || i === 3 || i === 5) cell.numFmt = '#,##0.00';
+                        if(i >= 4) cell.font = fontBold;
+                    });
+
+                    // Target & Bonus
+                    let cell = row.getCell(c++); cell.value = target; cell.border = thinBorder; cell.numFmt = '#,##0.00'; cell.fill = fillStyle('E3F2FD');
+                    cell = row.getCell(c++); cell.value = bonus; cell.border = thinBorder; cell.numFmt = '#,##0.00'; cell.font = {color:{argb:'FF008000'}, bold:true}; cell.fill = fillStyle('E3F2FD');
+
+                    // Profit%
+                    cell = row.getCell(c++); cell.value = formatNumber(avgProfitability) + '%'; cell.border = thinBorder; cell.font = {color:{argb:'FF1E40AF'}, bold:true}; cell.fill = fillStyle('E3F2FD');
+
+                    // Web Pr
+                    cell = row.getCell(c++); cell.value = websiteCount; cell.border = thinBorder;
+                    cell = row.getCell(c++); cell.value = safeVal(item.websiteProfit); cell.border = thinBorder; cell.numFmt = '#,##0.00';
+                    
+                    // Web Sec
+                    cell = row.getCell(c++); cell.value = safeVal(item.websiteCountSec); cell.border = thinBorder; cell.fill = fillStyle('F3E8FF');
+                    cell = row.getCell(c++); cell.value = safeVal(item.websiteProfitSec); cell.border = thinBorder; cell.numFmt = '#,##0.00'; cell.fill = fillStyle('F3E8FF');
+                    
+                    // Burse
+                    cell = row.getCell(c++); cell.value = safeVal(item.burseCount); cell.border = thinBorder; cell.fill = fillStyle('FFF7ED'); cell.font = {color:{argb:'FF9A3412'}, bold:true};
+
+                    // Solicitari
+                    cell = row.getCell(c++); cell.value = solicitari; cell.border = thinBorder; cell.fill = fillStyle('F3E8FF');
+                    cell = row.getCell(c++); cell.value = convWeb + '%'; cell.border = thinBorder;
+                    
+                    // Terms
+                    cell = row.getCell(c++); cell.value = formatNumber(avgClientTerm); cell.border = thinBorder;
+                    cell = row.getCell(c++); cell.value = formatNumber(avgSupplierTerm); cell.border = thinBorder;
+                    
+                    // Late
+                    cell = row.getCell(c++); cell.value = item.overdueInvoicesCount; cell.border = thinBorder; cell.font = {color:{argb:'FFFF0000'}, bold:true};
+                    
+                    // Furn Range
+                    cell = row.getCell(c++); cell.value = item.supplierTermsUnder30; cell.border = thinBorder; cell.fill = fillStyle('FFF7ED');
+                    cell = row.getCell(c++); cell.value = item.supplierTermsOver30; cell.border = thinBorder; cell.fill = fillStyle('FFF7ED');
+
+                    currentRow++;
+                });
+                
+                currentRow++; // Empty row after table
+            };
+
+            // 2. COMPANY TABLE
+            const addCompanyTable = () => {
+                let row = currentRow;
+                
+                sheet.mergeCells(`A${row}:C${row}`);
+                sheet.getCell(`A${row}`).value = "TOTAL COMPANIE (GLOBAL)";
+                sheet.getCell(`A${row}`).font = { size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+                sheet.getCell(`A${row}`).fill = fillStyle('1E293B');
+                row++;
+
+                // Header
+                sheet.getCell(`A${row}`).value = "Metrică";
+                sheet.getCell(`B${row}`).value = "După Data Contract";
+                sheet.getCell(`C${row}`).value = "După Data Livrare";
+                [1,2,3].forEach(c => {
+                    sheet.getCell(row, c).font = fontBold;
+                    sheet.getCell(row, c).border = thinBorder;
+                    sheet.getCell(row, c).fill = fillStyle('F3F4F6');
+                });
+                row++;
+
+                // Rows helper
+                const addRow = (label, val1, val2, bold = false, color = null, bg = null) => {
+                    const r = sheet.getRow(row);
+                    r.getCell(1).value = label;
+                    r.getCell(2).value = val1;
+                    r.getCell(3).value = val2;
+                    [1,2,3].forEach(c => {
+                        r.getCell(c).border = thinBorder;
+                        if(bg) r.getCell(c).fill = fillStyle(bg);
+                        if(bold) r.getCell(c).font = { bold: true, color: { argb: color || 'FF000000' } };
+                    });
+                    if(typeof val1 === 'number' && val1 > 1000) r.getCell(2).numFmt = '#,##0.00';
+                    if(typeof val2 === 'number' && val2 > 1000) r.getCell(3).numFmt = '#,##0.00';
+                    row++;
+                };
+
+                addRow('Număr Total Curse', companyStats.ctr.count, companyStats.livr.count, true, null, 'E3F2FD');
+                addRow('Profit Total (EUR)', companyStats.ctr.profit, companyStats.livr.profit, true, 'FF008000');
+                addRow('Website / Fix - Curse', companyStats.ctr.websiteCount, companyStats.livr.websiteCount);
+                addRow('Website / Fix - Profit', companyStats.ctr.websiteProfit, companyStats.livr.websiteProfit);
+                addRow('Burse - Curse', companyStats.ctr.burseCount, companyStats.livr.burseCount);
+
+                // Breakdowns
+                const calcPct = (c, t) => t > 0 ? ((c/t)*100).toFixed(1)+"%" : "0.0%";
+
+                const addBreakdown = (title, fieldKey) => {
+                    const ctrData = companyStats.ctr.breakdowns?.[fieldKey] || {};
+                    const livrData = companyStats.livr.breakdowns?.[fieldKey] || {};
+                    const keys = new Set([...Object.keys(ctrData), ...Object.keys(livrData)]);
+                    if(keys.size === 0) return;
+
+                    // Section Header
+                    const r = sheet.getRow(row);
+                    sheet.mergeCells(`A${row}:C${row}`);
+                    r.getCell(1).value = title;
+                    r.getCell(1).font = { bold: true };
+                    r.getCell(1).fill = fillStyle('E5E7EB');
+                    r.getCell(1).border = thinBorder;
+                    row++;
+
+                    [...keys].sort().forEach(k => {
+                        const v1 = ctrData[k] || 0;
+                        const v2 = livrData[k] || 0;
+                        const t1 = `${v1} (${calcPct(v1, companyStats.ctr.count)})`;
+                        const t2 = `${v2} (${calcPct(v2, companyStats.livr.count)})`;
+                        
+                        const dr = sheet.getRow(row);
+                        dr.getCell(1).value = k;
+                        dr.getCell(2).value = t1;
+                        dr.getCell(3).value = t2;
+                        [1,2,3].forEach(c => dr.getCell(c).border = thinBorder);
+                        row++;
+                    });
+                };
+
+                addBreakdown("Tip serviciu", "STATUS_CTR");
+                addBreakdown("Dep", "DEP");
+                addBreakdown("Status Plata Client", "STATUS_PLATA_CLIENT");
+                addBreakdown("Moneda Cursa", "MONEDA");
+                addBreakdown("Sursa Client", "SURSA");
+                addBreakdown("Implicare", "IMPLICARE");
+                addBreakdown("Client Pe", "CLIENT_PE");
+                addBreakdown("Furnizor Pe", "FURNIZ_PE");
+                addBreakdown("Client/Furnizor Pe", "CLIENT_FURNIZOR_PE");
+                addBreakdown("Mod Transport", "MOD_TRANSPORT");
+                addBreakdown("Tip Marfa", "TIP_MARFA");
+                addBreakdown("Ocupare Mij Transport", "OCUPARE");
+                
+                currentRow = row;
+            };
+
+            // Build Sheets
+            if (mgmtStats.length) addDepartmentTable('Departament Management', mgmtStats, false);
+            if (opsStats.length) addDepartmentTable('Departament Operațiuni', opsStats, false);
+            if (salesStats.length) addDepartmentTable('Departament Vânzări', salesStats, true);
+            addCompanyTable();
+
+            // Auto-width for columns
+            sheet.columns.forEach(column => {
+                column.width = 15;
+            });
+            sheet.getColumn(1).width = 25; // Name column wider
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = window.URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = filename;
+            anchor.click();
+            window.URL.revokeObjectURL(url);
+        };
     };
 
     return (
