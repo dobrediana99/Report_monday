@@ -1455,543 +1455,378 @@ export default function App() {
             return;
         }
 
-        const filename = `Raport_${dateRangeStr.replace(/[^a-zA-Z0-9.-]/g, '_')}.xlsx`;
-        
-        if (!window.ExcelJS) {
-            const script = document.createElement('script');
-            script.src = "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js";
-            script.onload = () => generateExcel();
-            document.body.appendChild(script);
-        } else {
-            generateExcel();
-        }
+        setError(null);
 
+        // -------------------------
+        // 1) Filename fără "___"
+        // dateRangeStr e de forma: "01.10.2025 – 31.10.2025"
+        // -> "01.10.2025_31.10.2025"
+        // -------------------------
+        const rangeForFile = (dateRangeStr || "")
+            .replace(/\s*[–-]\s*/g, "_") // en dash sau minus, cu/ fără spații -> "_"
+            .replace(/\s+/g, "")         // elimină spațiile rămase
+            .replace(/[^a-zA-Z0-9._-]/g, ""); // extra-siguranță pt. nume fișier
+
+        const filename = `Raport_${rangeForFile || "raport"}.xlsx`;
+
+        // ---------------------------------------------------
+        // 2) generateExcel definit ÎNAINTE de if/else (fix TDZ)
+        // ---------------------------------------------------
         const generateExcel = async () => {
             const workbook = new window.ExcelJS.Workbook();
-            const sheet = workbook.addWorksheet('Raport');
+            const sheet = workbook.addWorksheet("Raport");
             let currentRow = 1;
 
-            const thinBorder = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+            const thinBorder = {
+                top: { style: "thin" },
+                left: { style: "thin" },
+                bottom: { style: "thin" },
+                right: { style: "thin" },
+            };
             const fontBold = { bold: true };
-            const alignCenter = { vertical: 'middle', horizontal: 'center' };
-            const fillStyle = (color) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF' + color } });
+            const alignCenter = { vertical: "middle", horizontal: "center" };
+            const fillStyle = (color) => ({
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FF" + color },
+            });
 
+            // =========================================================
+            // addDepartmentTable (exact ca la tine)
+            // =========================================================
             const addDepartmentTable = (title, data, isSales) => {
-  const titleRow = sheet.getRow(currentRow);
-  titleRow.getCell(1).value = title;
-  titleRow.getCell(1).font = { size: 14, bold: true };
-  currentRow += 2;
-
-  const startRow = currentRow;
-  let col = 1;
-
-  const writeHeaderCell = (r1, c1, r2, c2, value, fillHex, extra = {}) => {
-    sheet.mergeCells(r1, c1, r2, c2);
-    const cell = sheet.getCell(r1, c1);
-    cell.value = value;
-    if (fillHex) cell.fill = fillStyle(fillHex);
-    cell.border = thinBorder;
-    cell.font = extra.font || fontBold;
-    cell.alignment = extra.alignment || alignCenter;
-    return cell;
-  };
-
-  // =========================================================
-  // 1) HEADERS (mutăm Sales metrics la FINAL în Excel)
-  // =========================================================
-
-  // ANGAJAT
-  writeHeaderCell(startRow, col, startRow + 1, col, "ANGAJAT", "F2F2F2");
-  col++;
-
-  // FURNIZORI
-  writeHeaderCell(startRow, col, startRow + 1, col, "FURNIZORI", null, { font: fontBold });
-  sheet.getCell(startRow, col).border = thinBorder;
-  sheet.getCell(startRow, col).alignment = alignCenter;
-  col++;
-
-  // DUPA DATA CONTRACT (6)
-  writeHeaderCell(startRow, col, startRow, col + 5, "DUPĂ DATA CONTRACT", "E3F2FD");
-  ["Curse Pr.", "Profit Pr.", "Curse Sec.", "Profit Sec.", "Total Curse", "Total Profit"].forEach((h, i) => {
-    const c = sheet.getCell(startRow + 1, col + i);
-    c.value = h;
-    c.fill = fillStyle("E3F2FD");
-    c.border = thinBorder;
-    c.alignment = alignCenter;
-  });
-  col += 6;
-
-  // DUPA DATA LIVRARE (6)
-  writeHeaderCell(startRow, col, startRow, col + 5, "DUPĂ DATA LIVRARE", "E8F5E9");
-  ["Curse Pr.", "Profit Pr.", "Curse Sec.", "Profit Sec.", "Total Curse", "Total Profit"].forEach((h, i) => {
-    const c = sheet.getCell(startRow + 1, col + i);
-    c.value = h;
-    c.fill = fillStyle("E8F5E9");
-    c.border = thinBorder;
-    c.alignment = alignCenter;
-  });
-  col += 6;
-
-  // TARGET + PROFIT PESTE TARGET
-  writeHeaderCell(startRow, col, startRow + 1, col, "TARGET", "E3F2FD", { font: fontBold });
-  col++;
-  writeHeaderCell(startRow, col, startRow + 1, col, "PROFIT PESTE TARGET", "E3F2FD", { font: fontBold });
-  col++;
-
-  // OTHER COLS (13)
-  const others = [
-    { t: "PROFITABILITATE %", c: "E3F2FD" },
-    { t: "CURSE WEB PR.", c: "FFFFFF" },
-    { t: "PROFIT WEB PR.", c: "FFFFFF" },
-    { t: "CURSE WEB SEC.", c: "F3E8FF" },
-    { t: "PROFIT WEB SEC.", c: "F3E8FF" },
-    { t: "CURSE BURSE", c: "FFF7ED" },
-    { t: "SOLICITĂRI WEB", c: "F3E8FF" },
-    { t: "CONV WEB %", c: "FFFFFF" },
-    { t: "TERMEN CLIENT", c: "FFFFFF" },
-    { t: "TERMEN FURNIZOR", c: "FFFFFF" },
-    { t: "INTARZIERI >15", c: "FFFFFF", color: "FFFF0000" },
-    { t: "FURN <30", c: "FFF7ED" },
-    { t: "FURN >=30", c: "FFF7ED" },
-  ];
-  others.forEach((o) => {
-    const cell = writeHeaderCell(startRow, col, startRow + 1, col, o.t, o.c, { font: fontBold });
-    if (o.color) cell.font = { color: { argb: o.color }, bold: true };
-    col++;
-  });
-
-  // SALES METRICS LA FINAL (doar dacă isSales)
-  // CONTACTATI CALIFICATI RATA CONV EMAILS APELURI
-  const salesMetricsStartCol = col;
-  if (isSales) {
-    ["CONTACTATI", "CALIFICATI", "RATA CONV.", "EMAILS", "APELURI"].forEach((h, i) => {
-      const fill = i < 3 ? "FEF9C3" : "E0E7FF";
-      writeHeaderCell(startRow, col, startRow + 1, col, h, fill, { font: fontBold });
-      col++;
-    });
-  }
-
-  currentRow += 2;
-
-  // =========================================================
-  // 2) BODY ROWS (scriem tot, iar Sales metrics la FINAL)
-  // =========================================================
-
-  const target = 0;
-
-  data.forEach((item) => {
-    const row = sheet.getRow(currentRow);
-    let c = 1;
-
-    const totalCountCtr = safeVal(item.ctr_principalCount) + safeVal(item.ctr_secondaryCount);
-    const totalProfitEurCtr = safeVal(item.ctr_principalProfitEur) + safeVal(item.ctr_secondaryProfitEur);
-    const totalCountLivr = safeVal(item.livr_principalCount) + safeVal(item.livr_secondaryCount);
-    const totalProfitEurLivr = safeVal(item.livr_principalProfitEur) + safeVal(item.livr_secondaryProfitEur);
-
-    const bonus = totalProfitEurCtr - target;
-
-    const qualified = safeVal(item.calificat);
-    const contacted = safeVal(item.contactat);
-    const rataConversie = (qualified + contacted) > 0
-      ? ((qualified / (qualified + contacted)) * 100).toFixed(1)
-      : "0.0";
-
-    const solicitari = safeVal(item.solicitariCount);
-    const websiteCount = safeVal(item.websiteCount);
-    const convWeb = solicitari > 0
-      ? ((websiteCount / solicitari) * 100).toFixed(1)
-      : (websiteCount > 0 ? "100.0" : "0.0");
-
-    const avgClientTerm = item.countClientTerms > 0 ? (item.sumClientTerms / item.countClientTerms) : 0;
-    const avgSupplierTerm = item.countSupplierTerms > 0 ? (item.sumSupplierTerms / item.countSupplierTerms) : 0;
-    const avgProfitability = item.countProfitability > 0 ? (item.sumProfitability / item.countProfitability) : 0;
-
-    // ANGAJAT
-    row.getCell(c).value = item.name;
-    row.getCell(c).border = thinBorder;
-    c++;
-
-    // FURNIZORI
-    row.getCell(c).value = safeVal(item.suppliersAdded);
-    row.getCell(c).border = thinBorder;
-    row.getCell(c).alignment = alignCenter;
-    c++;
-
-    // CTR 6
-    [
-      safeVal(item.ctr_principalCount),
-      safeVal(item.ctr_principalProfitEur),
-      safeVal(item.ctr_secondaryCount),
-      safeVal(item.ctr_secondaryProfitEur),
-      totalCountCtr,
-      totalProfitEurCtr
-    ].forEach((v, i) => {
-      const cell = row.getCell(c++);
-      cell.value = v;
-      cell.border = thinBorder;
-      cell.alignment = alignCenter;
-      cell.fill = fillStyle("E3F2FD");
-      if (i === 1 || i === 3 || i === 5) cell.numFmt = "#,##0.00";
-      if (i >= 4) cell.font = fontBold;
-    });
-
-    // LIVR 6
-    [
-      safeVal(item.livr_principalCount),
-      safeVal(item.livr_principalProfitEur),
-      safeVal(item.livr_secondaryCount),
-      safeVal(item.livr_secondaryProfitEur),
-      totalCountLivr,
-      totalProfitEurLivr
-    ].forEach((v, i) => {
-      const cell = row.getCell(c++);
-      cell.value = v;
-      cell.border = thinBorder;
-      cell.alignment = alignCenter;
-      cell.fill = fillStyle("E8F5E9");
-      if (i === 1 || i === 3 || i === 5) cell.numFmt = "#,##0.00";
-      if (i >= 4) cell.font = fontBold;
-    });
-
-    // TARGET + BONUS
-    let cell = row.getCell(c++);
-    cell.value = target;
-    cell.border = thinBorder;
-    cell.numFmt = "#,##0.00";
-    cell.fill = fillStyle("E3F2FD");
-
-    cell = row.getCell(c++);
-    cell.value = bonus;
-    cell.border = thinBorder;
-    cell.numFmt = "#,##0.00";
-    cell.font = { color: { argb: "FF008000" }, bold: true };
-    cell.fill = fillStyle("E3F2FD");
-
-    // OTHERS 13
-    cell = row.getCell(c++);
-    cell.value = formatNumber(avgProfitability) + "%";
-    cell.border = thinBorder;
-    cell.font = { color: { argb: "FF1E40AF" }, bold: true };
-    cell.fill = fillStyle("E3F2FD");
-
-    cell = row.getCell(c++);
-    cell.value = websiteCount;
-    cell.border = thinBorder;
-
-    cell = row.getCell(c++);
-    cell.value = safeVal(item.websiteProfit);
-    cell.border = thinBorder;
-    cell.numFmt = "#,##0.00";
-
-    cell = row.getCell(c++);
-    cell.value = safeVal(item.websiteCountSec);
-    cell.border = thinBorder;
-    cell.fill = fillStyle("F3E8FF");
-
-    cell = row.getCell(c++);
-    cell.value = safeVal(item.websiteProfitSec);
-    cell.border = thinBorder;
-    cell.numFmt = "#,##0.00";
-    cell.fill = fillStyle("F3E8FF");
-
-    cell = row.getCell(c++);
-    cell.value = safeVal(item.burseCount);
-    cell.border = thinBorder;
-    cell.fill = fillStyle("FFF7ED");
-    cell.font = { color: { argb: "FF9A3412" }, bold: true };
-
-    cell = row.getCell(c++);
-    cell.value = solicitari;
-    cell.border = thinBorder;
-    cell.fill = fillStyle("F3E8FF");
-
-    cell = row.getCell(c++);
-    cell.value = convWeb + "%";
-    cell.border = thinBorder;
-
-    cell = row.getCell(c++);
-    cell.value = formatNumber(avgClientTerm);
-    cell.border = thinBorder;
-
-    cell = row.getCell(c++);
-    cell.value = formatNumber(avgSupplierTerm);
-    cell.border = thinBorder;
-
-    cell = row.getCell(c++);
-    cell.value = item.overdueInvoicesCount;
-    cell.border = thinBorder;
-    cell.font = { color: { argb: "FFFF0000" }, bold: true };
-
-    cell = row.getCell(c++);
-    cell.value = item.supplierTermsUnder30;
-    cell.border = thinBorder;
-    cell.fill = fillStyle("FFF7ED");
-
-    cell = row.getCell(c++);
-    cell.value = item.supplierTermsOver30;
-    cell.border = thinBorder;
-    cell.fill = fillStyle("FFF7ED");
-
-    // SALES METRICS LA FINAL
-    if (isSales) {
-      const startC = salesMetricsStartCol;
-      const metrics = [
-        { v: contacted, fill: "FEF9C3" },
-        { v: qualified, fill: "FEF9C3" },
-        { v: rataConversie + "%", fill: "FEF9C3" },
-        { v: safeVal(item.emailsCount), fill: "E0E7FF" },
-        { v: safeVal(item.callsCount), fill: "E0E7FF" },
-      ];
-      metrics.forEach((m, idx) => {
-        const cc = row.getCell(startC + idx);
-        cc.value = m.v;
-        cc.border = thinBorder;
-        cc.alignment = alignCenter;
-        cc.fill = fillStyle(m.fill);
-      });
-    }
-
-    currentRow++;
-  });
-
-  // =========================================================
-  // 3) FOOTER TOTAL + MEDIA (ca în browser)
-  // =========================================================
-
-  const totals = data.reduce((acc, row) => {
-    acc.contactat += safeVal(row.contactat);
-    acc.calificat += safeVal(row.calificat);
-    acc.emailsCount += safeVal(row.emailsCount);
-    acc.callsCount += safeVal(row.callsCount);
-
-    acc.suppliersAdded += safeVal(row.suppliersAdded);
-
-    acc.ctr_principalCount += safeVal(row.ctr_principalCount);
-    acc.ctr_principalProfitEur += safeVal(row.ctr_principalProfitEur);
-    acc.ctr_secondaryCount += safeVal(row.ctr_secondaryCount);
-    acc.ctr_secondaryProfitEur += safeVal(row.ctr_secondaryProfitEur);
-
-    acc.livr_principalCount += safeVal(row.livr_principalCount);
-    acc.livr_principalProfitEur += safeVal(row.livr_principalProfitEur);
-    acc.livr_secondaryCount += safeVal(row.livr_secondaryCount);
-    acc.livr_secondaryProfitEur += safeVal(row.livr_secondaryProfitEur);
-
-    acc.websiteCount += safeVal(row.websiteCount);
-    acc.websiteProfit += safeVal(row.websiteProfit);
-    acc.websiteCountSec += safeVal(row.websiteCountSec);
-    acc.websiteProfitSec += safeVal(row.websiteProfitSec);
-    acc.burseCount += safeVal(row.burseCount);
-
-    acc.solicitariCount += safeVal(row.solicitariCount);
-
-    acc.sumClientTerms += safeVal(row.sumClientTerms);
-    acc.countClientTerms += safeVal(row.countClientTerms);
-    acc.sumSupplierTerms += safeVal(row.sumSupplierTerms);
-    acc.countSupplierTerms += safeVal(row.countSupplierTerms);
-
-    acc.overdueInvoicesCount += safeVal(row.overdueInvoicesCount);
-
-    acc.sumProfitability += safeVal(row.sumProfitability);
-    acc.countProfitability += safeVal(row.countProfitability);
-
-    acc.supplierTermsUnder30 += safeVal(row.supplierTermsUnder30);
-    acc.supplierTermsOver30 += safeVal(row.supplierTermsOver30);
-
-    return acc;
-  }, {
-    contactat: 0, calificat: 0, emailsCount: 0, callsCount: 0,
-    suppliersAdded: 0,
-    ctr_principalCount: 0, ctr_principalProfitEur: 0, ctr_secondaryCount: 0, ctr_secondaryProfitEur: 0,
-    livr_principalCount: 0, livr_principalProfitEur: 0, livr_secondaryCount: 0, livr_secondaryProfitEur: 0,
-    websiteCount: 0, websiteProfit: 0, websiteCountSec: 0, websiteProfitSec: 0, burseCount: 0,
-    solicitariCount: 0,
-    sumClientTerms: 0, countClientTerms: 0,
-    sumSupplierTerms: 0, countSupplierTerms: 0,
-    overdueInvoicesCount: 0,
-    sumProfitability: 0, countProfitability: 0,
-    supplierTermsUnder30: 0, supplierTermsOver30: 0
-  });
-
-  const count = data.length || 1;
-
-  const totalCtrCount = totals.ctr_principalCount + totals.ctr_secondaryCount;
-  const totalCtrProfit = totals.ctr_principalProfitEur + totals.ctr_secondaryProfitEur;
-  const totalLivrCount = totals.livr_principalCount + totals.livr_secondaryCount;
-  const totalLivrProfit = totals.livr_principalProfitEur + totals.livr_secondaryProfitEur;
-
-  const totalLeads = totals.calificat + totals.contactat;
-  const rateConvClients = totalLeads > 0 ? (totals.calificat / totalLeads) * 100 : 0;
-
-  const rateConvWeb = totals.solicitariCount > 0 ? (totals.websiteCount / totals.solicitariCount) * 100 : 0;
-
-  const avgProfitability = totals.countProfitability > 0 ? totals.sumProfitability / totals.countProfitability : 0;
-  const avgClientTerm = totals.countClientTerms > 0 ? totals.sumClientTerms / totals.countClientTerms : 0;
-  const avgSupplierTerm = totals.countSupplierTerms > 0 ? totals.sumSupplierTerms / totals.countSupplierTerms : 0;
-
-  const bonusTotal = totalCtrProfit - target;
-  const bonusAvg = bonusTotal / count;
-
-  const avg = (v) => v / count;
-
-  const writeFooterRow = (label, isAvg) => {
-    const r = sheet.getRow(currentRow);
-    // background + bold
-    for (let cc = 1; cc <= (isSales ? (salesMetricsStartCol + 5 - 1) : (salesMetricsStartCol - 1)); cc++) {
-      const cell = r.getCell(cc);
-      cell.border = thinBorder;
-      cell.fill = fillStyle(isAvg ? "F3F4F6" : "E5E7EB");
-      if (!isAvg) cell.font = fontBold;
-      cell.alignment = alignCenter;
-    }
-
-    let c = 1;
-    r.getCell(c).value = label;
-    r.getCell(c).alignment = { vertical: "middle", horizontal: "left" };
-    c++;
-
-    // furnizori
-    r.getCell(c).value = isAvg ? formatNumber(avg(totals.suppliersAdded)) : totals.suppliersAdded;
-    c++;
-
-    // CTR 6
-    const ctrVals = isAvg
-      ? [avg(totals.ctr_principalCount), avg(totals.ctr_principalProfitEur), avg(totals.ctr_secondaryCount), avg(totals.ctr_secondaryProfitEur), avg(totalCtrCount), avg(totalCtrProfit)]
-      : [totals.ctr_principalCount, totals.ctr_principalProfitEur, totals.ctr_secondaryCount, totals.ctr_secondaryProfitEur, totalCtrCount, totalCtrProfit];
-
-    ctrVals.forEach((v, i) => {
-      const cell = r.getCell(c++);
-      cell.value = v;
-      cell.fill = fillStyle("E3F2FD");
-      if (i === 1 || i === 3 || i === 5) cell.numFmt = "#,##0.00";
-      if (!isAvg && i >= 4) cell.font = fontBold;
-    });
-
-    // LIVR 6
-    const livrVals = isAvg
-      ? [avg(totals.livr_principalCount), avg(totals.livr_principalProfitEur), avg(totals.livr_secondaryCount), avg(totals.livr_secondaryProfitEur), avg(totalLivrCount), avg(totalLivrProfit)]
-      : [totals.livr_principalCount, totals.livr_principalProfitEur, totals.livr_secondaryCount, totals.livr_secondaryProfitEur, totalLivrCount, totalLivrProfit];
-
-    livrVals.forEach((v, i) => {
-      const cell = r.getCell(c++);
-      cell.value = v;
-      cell.fill = fillStyle("E8F5E9");
-      if (i === 1 || i === 3 || i === 5) cell.numFmt = "#,##0.00";
-      if (!isAvg && i >= 4) cell.font = fontBold;
-    });
-
-    // TARGET + BONUS
-    let cell = r.getCell(c++);
-    cell.value = isAvg ? 0 : 0;
-    cell.fill = fillStyle("E3F2FD");
-    cell.numFmt = "#,##0.00";
-
-    cell = r.getCell(c++);
-    cell.value = isAvg ? bonusAvg : bonusTotal;
-    cell.fill = fillStyle("E3F2FD");
-    cell.numFmt = "#,##0.00";
-    cell.font = { color: { argb: "FF008000" }, bold: true };
-
-    // others 13
-    cell = r.getCell(c++);
-    cell.value = isAvg ? "-" : formatNumber(avgProfitability) + "%";
-    cell.fill = fillStyle("E3F2FD");
-
-    r.getCell(c++).value = isAvg ? formatNumber(avg(totals.websiteCount)) : totals.websiteCount;
-    r.getCell(c++).value = isAvg ? avg(totals.websiteProfit) : totals.websiteProfit; r.getCell(c-1).numFmt = "#,##0.00";
-    r.getCell(c++).value = isAvg ? formatNumber(avg(totals.websiteCountSec)) : totals.websiteCountSec; r.getCell(c-1).fill = fillStyle("F3E8FF");
-    r.getCell(c++).value = isAvg ? avg(totals.websiteProfitSec) : totals.websiteProfitSec; r.getCell(c-1).numFmt = "#,##0.00"; r.getCell(c-1).fill = fillStyle("F3E8FF");
-    r.getCell(c++).value = isAvg ? formatNumber(avg(totals.burseCount)) : totals.burseCount; r.getCell(c-1).fill = fillStyle("FFF7ED");
-
-    r.getCell(c++).value = isAvg ? formatNumber(avg(totals.solicitariCount)) : totals.solicitariCount; r.getCell(c-1).fill = fillStyle("F3E8FF");
-
-    r.getCell(c++).value = isAvg ? "-" : formatNumber(rateConvWeb) + "%";
-    r.getCell(c++).value = isAvg ? "-" : formatNumber(avgClientTerm);
-    r.getCell(c++).value = isAvg ? "-" : formatNumber(avgSupplierTerm);
-
-    r.getCell(c++).value = isAvg ? formatNumber(avg(totals.overdueInvoicesCount)) : totals.overdueInvoicesCount;
-    r.getCell(c++).value = isAvg ? formatNumber(avg(totals.supplierTermsUnder30)) : totals.supplierTermsUnder30; r.getCell(c-1).fill = fillStyle("FFF7ED");
-    r.getCell(c++).value = isAvg ? formatNumber(avg(totals.supplierTermsOver30)) : totals.supplierTermsOver30; r.getCell(c-1).fill = fillStyle("FFF7ED");
-
-    // sales metrics la final (dacă există)
-    if (isSales) {
-      const startC = salesMetricsStartCol;
-      if (!isAvg) {
-        r.getCell(startC + 0).value = totals.contactat;
-        r.getCell(startC + 1).value = totals.calificat;
-        r.getCell(startC + 2).value = formatNumber(rateConvClients) + "%";
-        r.getCell(startC + 3).value = totals.emailsCount;
-        r.getCell(startC + 4).value = totals.callsCount;
-      } else {
-        r.getCell(startC + 0).value = formatNumber(avg(totals.contactat));
-        r.getCell(startC + 1).value = formatNumber(avg(totals.calificat));
-        r.getCell(startC + 2).value = "-";
-        r.getCell(startC + 3).value = formatNumber(avg(totals.emailsCount));
-        r.getCell(startC + 4).value = formatNumber(avg(totals.callsCount));
-      }
-      // styling
-      ["FEF9C3","FEF9C3","FEF9C3","E0E7FF","E0E7FF"].forEach((hex, i) => {
-        const cc = r.getCell(startC + i);
-        cc.border = thinBorder;
-        cc.alignment = alignCenter;
-        cc.fill = fillStyle(hex);
-        if (!isAvg) cc.font = fontBold;
-      });
-    }
-
-    currentRow++;
-  };
-
-  writeFooterRow("TOTAL", false);
-  writeFooterRow("MEDIA", true);
-
-  currentRow++; // spațiu între tabele
-};
-
-
+                const titleRow = sheet.getRow(currentRow);
+                titleRow.getCell(1).value = title;
+                titleRow.getCell(1).font = { size: 14, bold: true };
+                currentRow += 2;
+
+                const startRow = currentRow;
+                let col = 1;
+
+                const writeHeaderCell = (r1, c1, r2, c2, value, fillHex, extra = {}) => {
+                    sheet.mergeCells(r1, c1, r2, c2);
+                    const cell = sheet.getCell(r1, c1);
+                    cell.value = value;
+                    if (fillHex) cell.fill = fillStyle(fillHex);
+                    cell.border = thinBorder;
+                    cell.font = extra.font || fontBold;
+                    cell.alignment = extra.alignment || alignCenter;
+                    return cell;
+                };
+
+                // 1) HEADERS
+                writeHeaderCell(startRow, col, startRow + 1, col, "ANGAJAT", "F2F2F2");
+                col++;
+
+                writeHeaderCell(startRow, col, startRow + 1, col, "FURNIZORI", null, { font: fontBold });
+                sheet.getCell(startRow, col).border = thinBorder;
+                sheet.getCell(startRow, col).alignment = alignCenter;
+                col++;
+
+                writeHeaderCell(startRow, col, startRow, col + 5, "DUPĂ DATA CONTRACT", "E3F2FD");
+                ["Curse Pr.", "Profit Pr.", "Curse Sec.", "Profit Sec.", "Total Curse", "Total Profit"].forEach((h, i) => {
+                    const c = sheet.getCell(startRow + 1, col + i);
+                    c.value = h;
+                    c.fill = fillStyle("E3F2FD");
+                    c.border = thinBorder;
+                    c.alignment = alignCenter;
+                });
+                col += 6;
+
+                writeHeaderCell(startRow, col, startRow, col + 5, "DUPĂ DATA LIVRARE", "E8F5E9");
+                ["Curse Pr.", "Profit Pr.", "Curse Sec.", "Profit Sec.", "Total Curse", "Total Profit"].forEach((h, i) => {
+                    const c = sheet.getCell(startRow + 1, col + i);
+                    c.value = h;
+                    c.fill = fillStyle("E8F5E9");
+                    c.border = thinBorder;
+                    c.alignment = alignCenter;
+                });
+                col += 6;
+
+                writeHeaderCell(startRow, col, startRow + 1, col, "TARGET", "E3F2FD", { font: fontBold });
+                col++;
+                writeHeaderCell(startRow, col, startRow + 1, col, "PROFIT PESTE TARGET", "E3F2FD", { font: fontBold });
+                col++;
+
+                const others = [
+                    { t: "PROFITABILITATE %", c: "E3F2FD" },
+                    { t: "CURSE WEB PR.", c: "FFFFFF" },
+                    { t: "PROFIT WEB PR.", c: "FFFFFF" },
+                    { t: "CURSE WEB SEC.", c: "F3E8FF" },
+                    { t: "PROFIT WEB SEC.", c: "F3E8FF" },
+                    { t: "CURSE BURSE", c: "FFF7ED" },
+                    { t: "SOLICITĂRI WEB", c: "F3E8FF" },
+                    { t: "CONV WEB %", c: "FFFFFF" },
+                    { t: "TERMEN CLIENT", c: "FFFFFF" },
+                    { t: "TERMEN FURNIZOR", c: "FFFFFF" },
+                    { t: "INTARZIERI >15", c: "FFFFFF", color: "FFFF0000" },
+                    { t: "FURN <30", c: "FFF7ED" },
+                    { t: "FURN >=30", c: "FFF7ED" },
+                ];
+                others.forEach((o) => {
+                    const cell = writeHeaderCell(startRow, col, startRow + 1, col, o.t, o.c, { font: fontBold });
+                    if (o.color) cell.font = { color: { argb: o.color }, bold: true };
+                    col++;
+                });
+
+                const salesMetricsStartCol = col;
+                if (isSales) {
+                    ["CONTACTATI", "CALIFICATI", "RATA CONV.", "EMAILS", "APELURI"].forEach((h, i) => {
+                        const fill = i < 3 ? "FEF9C3" : "E0E7FF";
+                        writeHeaderCell(startRow, col, startRow + 1, col, h, fill, { font: fontBold });
+                        col++;
+                    });
+                }
+
+                currentRow += 2;
+
+                // 2) BODY
+                const target = 0;
+
+                data.forEach((item) => {
+                    const row = sheet.getRow(currentRow);
+                    let c = 1;
+
+                    const totalCountCtr = safeVal(item.ctr_principalCount) + safeVal(item.ctr_secondaryCount);
+                    const totalProfitEurCtr = safeVal(item.ctr_principalProfitEur) + safeVal(item.ctr_secondaryProfitEur);
+                    const totalCountLivr = safeVal(item.livr_principalCount) + safeVal(item.livr_secondaryCount);
+                    const totalProfitEurLivr = safeVal(item.livr_principalProfitEur) + safeVal(item.livr_secondaryProfitEur);
+
+                    const bonus = totalProfitEurCtr - target;
+
+                    const qualified = safeVal(item.calificat);
+                    const contacted = safeVal(item.contactat);
+                    const rataConversie = (qualified + contacted) > 0
+                        ? ((qualified / (qualified + contacted)) * 100).toFixed(1)
+                        : "0.0";
+
+                    const solicitari = safeVal(item.solicitariCount);
+                    const websiteCount = safeVal(item.websiteCount);
+                    const convWeb = solicitari > 0
+                        ? ((websiteCount / solicitari) * 100).toFixed(1)
+                        : (websiteCount > 0 ? "100.0" : "0.0");
+
+                    const avgClientTerm = item.countClientTerms > 0 ? (item.sumClientTerms / item.countClientTerms) : 0;
+                    const avgSupplierTerm = item.countSupplierTerms > 0 ? (item.sumSupplierTerms / item.countSupplierTerms) : 0;
+                    const avgProfitability = item.countProfitability > 0 ? (item.sumProfitability / item.countProfitability) : 0;
+
+                    // ANGAJAT
+                    row.getCell(c).value = item.name;
+                    row.getCell(c).border = thinBorder;
+                    c++;
+
+                    // FURNIZORI
+                    row.getCell(c).value = safeVal(item.suppliersAdded);
+                    row.getCell(c).border = thinBorder;
+                    row.getCell(c).alignment = alignCenter;
+                    c++;
+
+                    // CTR 6
+                    [
+                        safeVal(item.ctr_principalCount),
+                        safeVal(item.ctr_principalProfitEur),
+                        safeVal(item.ctr_secondaryCount),
+                        safeVal(item.ctr_secondaryProfitEur),
+                        totalCountCtr,
+                        totalProfitEurCtr
+                    ].forEach((v, i) => {
+                        const cell = row.getCell(c++);
+                        cell.value = v;
+                        cell.border = thinBorder;
+                        cell.alignment = alignCenter;
+                        cell.fill = fillStyle("E3F2FD");
+                        if (i === 1 || i === 3 || i === 5) cell.numFmt = "#,##0.00";
+                        if (i >= 4) cell.font = fontBold;
+                    });
+
+                    // LIVR 6
+                    [
+                        safeVal(item.livr_principalCount),
+                        safeVal(item.livr_principalProfitEur),
+                        safeVal(item.livr_secondaryCount),
+                        safeVal(item.livr_secondaryProfitEur),
+                        totalCountLivr,
+                        totalProfitEurLivr
+                    ].forEach((v, i) => {
+                        const cell = row.getCell(c++);
+                        cell.value = v;
+                        cell.border = thinBorder;
+                        cell.alignment = alignCenter;
+                        cell.fill = fillStyle("E8F5E9");
+                        if (i === 1 || i === 3 || i === 5) cell.numFmt = "#,##0.00";
+                        if (i >= 4) cell.font = fontBold;
+                    });
+
+                    // TARGET + BONUS
+                    let cell = row.getCell(c++);
+                    cell.value = target;
+                    cell.border = thinBorder;
+                    cell.numFmt = "#,##0.00";
+                    cell.fill = fillStyle("E3F2FD");
+
+                    cell = row.getCell(c++);
+                    cell.value = bonus;
+                    cell.border = thinBorder;
+                    cell.numFmt = "#,##0.00";
+                    cell.font = { color: { argb: "FF008000" }, bold: true };
+                    cell.fill = fillStyle("E3F2FD");
+
+                    // OTHERS 13
+                    cell = row.getCell(c++);
+                    cell.value = formatNumber(avgProfitability) + "%";
+                    cell.border = thinBorder;
+                    cell.font = { color: { argb: "FF1E40AF" }, bold: true };
+                    cell.fill = fillStyle("E3F2FD");
+
+                    cell = row.getCell(c++);
+                    cell.value = websiteCount;
+                    cell.border = thinBorder;
+
+                    cell = row.getCell(c++);
+                    cell.value = safeVal(item.websiteProfit);
+                    cell.border = thinBorder;
+                    cell.numFmt = "#,##0.00";
+
+                    cell = row.getCell(c++);
+                    cell.value = safeVal(item.websiteCountSec);
+                    cell.border = thinBorder;
+                    cell.fill = fillStyle("F3E8FF");
+
+                    cell = row.getCell(c++);
+                    cell.value = safeVal(item.websiteProfitSec);
+                    cell.border = thinBorder;
+                    cell.numFmt = "#,##0.00";
+                    cell.fill = fillStyle("F3E8FF");
+
+                    cell = row.getCell(c++);
+                    cell.value = safeVal(item.burseCount);
+                    cell.border = thinBorder;
+                    cell.fill = fillStyle("FFF7ED");
+                    cell.font = { color: { argb: "FF9A3412" }, bold: true };
+
+                    cell = row.getCell(c++);
+                    cell.value = solicitari;
+                    cell.border = thinBorder;
+                    cell.fill = fillStyle("F3E8FF");
+
+                    cell = row.getCell(c++);
+                    cell.value = convWeb + "%";
+                    cell.border = thinBorder;
+
+                    cell = row.getCell(c++);
+                    cell.value = formatNumber(avgClientTerm);
+                    cell.border = thinBorder;
+
+                    cell = row.getCell(c++);
+                    cell.value = formatNumber(avgSupplierTerm);
+                    cell.border = thinBorder;
+
+                    cell = row.getCell(c++);
+                    cell.value = item.overdueInvoicesCount;
+                    cell.border = thinBorder;
+                    cell.font = { color: { argb: "FFFF0000" }, bold: true };
+
+                    cell = row.getCell(c++);
+                    cell.value = item.supplierTermsUnder30;
+                    cell.border = thinBorder;
+                    cell.fill = fillStyle("FFF7ED");
+
+                    cell = row.getCell(c++);
+                    cell.value = item.supplierTermsOver30;
+                    cell.border = thinBorder;
+                    cell.fill = fillStyle("FFF7ED");
+
+                    // SALES METRICS LA FINAL
+                    if (isSales) {
+                        const startC = salesMetricsStartCol;
+                        const metrics = [
+                            { v: contacted, fill: "FEF9C3" },
+                            { v: qualified, fill: "FEF9C3" },
+                            { v: rataConversie + "%", fill: "FEF9C3" },
+                            { v: safeVal(item.emailsCount), fill: "E0E7FF" },
+                            { v: safeVal(item.callsCount), fill: "E0E7FF" },
+                        ];
+                        metrics.forEach((m, idx) => {
+                            const cc = row.getCell(startC + idx);
+                            cc.value = m.v;
+                            cc.border = thinBorder;
+                            cc.alignment = alignCenter;
+                            cc.fill = fillStyle(m.fill);
+                        });
+                    }
+
+                    currentRow++;
+                });
+
+                currentRow++; // spațiu între tabele
+            };
+
+            // =========================================================
+            // addCompanyTable (exact ca la tine)
+            // =========================================================
             const addCompanyTable = () => {
                 let row = currentRow;
                 sheet.mergeCells(`A${row}:C${row}`);
-                let title = sheet.getCell(`A${row}`); title.value = "TOTAL COMPANIE (GLOBAL)"; title.font = { size: 12, bold: true, color: { argb: 'FFFFFFFF' } }; title.fill = fillStyle('1E293B');
+                let title = sheet.getCell(`A${row}`);
+                title.value = "TOTAL COMPANIE (GLOBAL)";
+                title.font = { size: 12, bold: true, color: { argb: "FFFFFFFF" } };
+                title.fill = fillStyle("1E293B");
                 row++;
 
-                sheet.getCell(`A${row}`).value = "Metrică"; sheet.getCell(`B${row}`).value = "După Data Contract"; sheet.getCell(`C${row}`).value = "După Data Livrare";
-                [1,2,3].forEach(c => { sheet.getCell(row, c).font = fontBold; sheet.getCell(row, c).border = thinBorder; sheet.getCell(row, c).fill = fillStyle('F3F4F6'); });
+                sheet.getCell(`A${row}`).value = "Metrică";
+                sheet.getCell(`B${row}`).value = "După Data Contract";
+                sheet.getCell(`C${row}`).value = "După Data Livrare";
+                [1, 2, 3].forEach((c) => {
+                    sheet.getCell(row, c).font = fontBold;
+                    sheet.getCell(row, c).border = thinBorder;
+                    sheet.getCell(row, c).fill = fillStyle("F3F4F6");
+                });
                 row++;
 
                 const addRow = (label, val1, val2, bold = false, color = null, bg = null) => {
                     const r = sheet.getRow(row);
-                    r.getCell(1).value = label; r.getCell(2).value = val1; r.getCell(3).value = val2;
-                    [1,2,3].forEach(c => { r.getCell(c).border = thinBorder; if(bg) r.getCell(c).fill = fillStyle(bg); if(bold) r.getCell(c).font = { bold: true, color: { argb: color || 'FF000000' } }; });
-                    if(typeof val1 === 'number' && val1 > 1000) r.getCell(2).numFmt = '#,##0.00';
-                    if(typeof val2 === 'number' && val2 > 1000) r.getCell(3).numFmt = '#,##0.00';
+                    r.getCell(1).value = label;
+                    r.getCell(2).value = val1;
+                    r.getCell(3).value = val2;
+                    [1, 2, 3].forEach((c) => {
+                        r.getCell(c).border = thinBorder;
+                        if (bg) r.getCell(c).fill = fillStyle(bg);
+                        if (bold) r.getCell(c).font = { bold: true, color: { argb: color || "FF000000" } };
+                    });
+                    if (typeof val1 === "number" && val1 > 1000) r.getCell(2).numFmt = "#,##0.00";
+                    if (typeof val2 === "number" && val2 > 1000) r.getCell(3).numFmt = "#,##0.00";
                     row++;
                 };
 
-                addRow('Număr Total Curse', companyStats.ctr.count, companyStats.livr.count, true, null, 'E3F2FD');
-                addRow('Profit Total (EUR)', companyStats.ctr.profit, companyStats.livr.profit, true, 'FF008000');
-                addRow('Website / Fix - Curse', companyStats.ctr.websiteCount, companyStats.livr.websiteCount);
-                addRow('Website / Fix - Profit', companyStats.ctr.websiteProfit, companyStats.livr.websiteProfit);
-                addRow('Burse - Curse', companyStats.ctr.burseCount, companyStats.livr.burseCount);
+                addRow("Număr Total Curse", companyStats.ctr.count, companyStats.livr.count, true, null, "E3F2FD");
+                addRow("Profit Total (EUR)", companyStats.ctr.profit, companyStats.livr.profit, true, "FF008000");
+                addRow("Website / Fix - Curse", companyStats.ctr.websiteCount, companyStats.livr.websiteCount);
+                addRow("Website / Fix - Profit", companyStats.ctr.websiteProfit, companyStats.livr.websiteProfit);
+                addRow("Burse - Curse", companyStats.ctr.burseCount, companyStats.livr.burseCount);
 
-                const calcPct = (c, t) => t > 0 ? ((c/t)*100).toFixed(1)+"%" : "0.0%";
+                const calcPct = (c, t) => (t > 0 ? ((c / t) * 100).toFixed(1) + "%" : "0.0%");
                 const addBreakdown = (title, fieldKey) => {
                     const ctrData = companyStats.ctr.breakdowns?.[fieldKey] || {};
                     const livrData = companyStats.livr.breakdowns?.[fieldKey] || {};
                     const keys = new Set([...Object.keys(ctrData), ...Object.keys(livrData)]);
-                    if(keys.size === 0) return;
+                    if (keys.size === 0) return;
 
                     const r = sheet.getRow(row);
                     sheet.mergeCells(`A${row}:C${row}`);
-                    r.getCell(1).value = title; r.getCell(1).font = { bold: true }; r.getCell(1).fill = fillStyle('E5E7EB'); r.getCell(1).border = thinBorder;
+                    r.getCell(1).value = title;
+                    r.getCell(1).font = { bold: true };
+                    r.getCell(1).fill = fillStyle("E5E7EB");
+                    r.getCell(1).border = thinBorder;
                     row++;
 
-                    [...keys].sort().forEach(k => {
-                        const v1 = ctrData[k] || 0; const v2 = livrData[k] || 0;
+                    [...keys].sort().forEach((k) => {
+                        const v1 = ctrData[k] || 0;
+                        const v2 = livrData[k] || 0;
                         const dr = sheet.getRow(row);
                         dr.getCell(1).value = k;
                         dr.getCell(2).value = `${v1} (${calcPct(v1, companyStats.ctr.count)})`;
                         dr.getCell(3).value = `${v2} (${calcPct(v2, companyStats.livr.count)})`;
-                        [1,2,3].forEach(c => dr.getCell(c).border = thinBorder);
+                        [1, 2, 3].forEach((c) => dr.getCell(c).border = thinBorder);
                         row++;
                     });
                 };
@@ -2010,24 +1845,52 @@ export default function App() {
                 addBreakdown("Ocupare Mij Transport", "OCUPARE");
             };
 
-            if (mgmtStats.length) addDepartmentTable('Departament Management', mgmtStats, false);
-            if (opsStats.length) addDepartmentTable('Departament Operațiuni', opsStats, false);
-            if (salesStats.length) addDepartmentTable('Departament Vânzări', salesStats, true);
+            // ============================
+            // Construire workbook
+            // ============================
+            if (mgmtStats.length) addDepartmentTable("Departament Management", mgmtStats, false);
+            if (opsStats.length) addDepartmentTable("Departament Operațiuni", opsStats, false);
+            if (salesStats.length) addDepartmentTable("Departament Vânzări", salesStats, true);
+
             addCompanyTable();
 
-            sheet.columns.forEach(column => { column.width = 15; });
-            sheet.getColumn(1).width = 25; 
+            sheet.columns.forEach((column) => { column.width = 15; });
+            sheet.getColumn(1).width = 25;
 
+            // ============================
+            // Download
+            // ============================
             const buffer = await workbook.xlsx.writeBuffer();
-            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const blob = new Blob([buffer], {
+                type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            });
+
             const url = window.URL.createObjectURL(blob);
-            const anchor = document.createElement('a');
+            const anchor = document.createElement("a");
             anchor.href = url;
             anchor.download = filename;
+
+            document.body.appendChild(anchor);
             anchor.click();
-            window.URL.revokeObjectURL(url);
+            anchor.remove();
+
+            setTimeout(() => window.URL.revokeObjectURL(url), 0);
         };
+
+        // -----------------------------------------
+        // 3) Load ExcelJS o singură dată (dacă lipsește)
+        // -----------------------------------------
+        if (!window.ExcelJS) {
+            const script = document.createElement("script");
+            script.src = "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js";
+            script.onload = () => generateExcel();
+            script.onerror = () => setError("Nu s-a putut încărca ExcelJS.");
+            document.body.appendChild(script);
+        } else {
+            generateExcel();
+        }
     };
+
 
     return (
         <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-6">
