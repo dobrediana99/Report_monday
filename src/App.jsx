@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { 
-  BarChart2, 
-  FileBarChart, 
-  AlertCircle, 
-  Download,
-  ArrowRight,
-  ExternalLink,
-  Bug
+import {
+    BarChart2,
+    FileBarChart,
+    AlertCircle,
+    Download,
+    ArrowRight,
+    ExternalLink,
+    Bug
 } from 'lucide-react';
 
 // --- CONFIGURARE ---
@@ -14,10 +14,10 @@ const API_KEY = "eyJhbGciOiJIUzI1NiJ9.eyJ0aWQiOjU4NzY4OTI3NiwiYWFpIjoxMSwidWlkIj
 const EXCHANGE_RATE = 5.1; // Curs actualizat 2025
 
 // IDs Board-uri
-const BOARD_ID_COMENZI = 2030349838; 
-const BOARD_ID_LEADS = 1853156722; 
+const BOARD_ID_COMENZI = 2030349838;
+const BOARD_ID_LEADS = 1853156722;
 const BOARD_ID_CONTACTE = 1853156713;
-const BOARD_ID_FURNIZORI = 1907628670; 
+const BOARD_ID_FURNIZORI = 1907628670;
 const BOARD_ID_SOLICITARI = 1905911565;
 
 // Link Google Drive
@@ -26,30 +26,30 @@ const DRIVE_FOLDER_LINK = "https://drive.google.com/drive/folders/1I_sUSjcWBXZr7
 // COLUMN IDs
 const COLS = {
     COMENZI: {
-        DATA_CTR: "deal_creation_date", 
-        DATA_LIVRARE: "date_mkvyt36d", 
-        STATUS_CTR: "color_mksem8fg", 
-        STATUS_TRANS: "color_mkse52dk", 
-        PRINCIPAL: "deal_owner", 
-        SECUNDAR: "multiple_person_mkt9b24z", 
+        DATA_CTR: "deal_creation_date",
+        DATA_LIVRARE: "date_mkvyt36d",
+        STATUS_CTR: "color_mksem8fg",
+        STATUS_TRANS: "color_mkse52dk",
+        PRINCIPAL: "deal_owner",
+        SECUNDAR: "multiple_person_mkt9b24z",
         PROFIT: "formula_mkre3gx1",
-        PROFIT_PRINCIPAL: "formula_mkt97xz", 
-        PROFIT_SECUNDAR: "formula_mkt949b4", 
-        SURSA: "color_mktcvtpz", 
+        PROFIT_PRINCIPAL: "formula_mkt97xz",
+        PROFIT_SECUNDAR: "formula_mkt949b4",
+        SURSA: "color_mktcvtpz",
         MONEDA: "color_mkse3amh",
         TERMEN_PLATA_CLIENT: "numeric_mksek8d2",
         TERMEN_PLATA_FURNIZOR: "numeric_mksev08g",
         DATA_SCADENTA_CLIENT: "date_mkyhsbh4",
         STATUS_PLATA_CLIENT: "color_mkv5g682",
         PROFITABILITATE: "formula_mkxwd14p",
-        
+
         // --- COLOANE NOI (Vor fi detectate dinamic) ---
-        CRT: "crt_column_id", 
-        DEP: "dep_column_id", 
-        IMPLICARE: "implicare_column_id", 
-        CLIENT_FURNIZOR_PE: "client_furnizor_pe_column_id", 
-        MOD_TRANSPORT: "mod_transport_column_id", 
-        TIP_MARFA: "tip_marfa_column_id", 
+        CRT: "crt_column_id",
+        DEP: "dep_column_id",
+        IMPLICARE: "implicare_column_id",
+        CLIENT_FURNIZOR_PE: "client_furnizor_pe_column_id",
+        MOD_TRANSPORT: "mod_transport_column_id",
+        TIP_MARFA: "tip_marfa_column_id",
         OCUPARE: "ocupare_mij_transport_column_id",
 
         // ADDED EXPLICITLY
@@ -57,23 +57,23 @@ const COLS = {
         FURNIZ_PE: "color_mkt9as8p"
     },
     FURNIZORI: {
-        DATA: "date4", 
-        PERSON: "person" 
+        DATA: "date4",
+        PERSON: "person"
     },
     SOLICITARI: {
         DATA: "deal_creation_date",
-        SURSA: "color_mkpv6sj4", 
+        SURSA: "color_mkpv6sj4",
         PRINCIPAL: "deal_owner",
         SECUNDAR: "multiple_person_mktbbfzk"
     },
     LEADS: {
-        DATA: "date_mkrcze31", 
-        STATUS: "lead_status", 
+        DATA: "date_mkrcze31",
+        STATUS: "lead_status",
         OWNER: "lead_owner"
     },
     CONTACTE: {
         DATA: "date_mkq2380r",
-        OWNER: "multiple_person_mknr9sz8" 
+        OWNER: "multiple_person_mknr9sz8"
     }
 };
 
@@ -81,37 +81,36 @@ const DEPARTMENTS = {
     management: {
         name: "Management",
         employees: [
-            { id: 301, name: "Alin Lita", mondayUserId: 73962695 },    
-            { id: 302, name: "Bogdan Serafim", mondayUserId: 73962698 }, 
-            { id: 303, name: "Rafael Onișoară", mondayUserId: 73046209 } 
+            { id: 301, name: "Alin Lita", mondayUserId: 73962695, target: 3960 },
+            { id: 302, name: "Bogdan Serafim", mondayUserId: 73962698, target: 3780 },
+            { id: 303, name: "Rafael Onișoară", mondayUserId: 73046209, target: 0 }
         ]
     },
     sales: {
         name: "Vânzări",
         employees: [
-            { id: 201, name: "Alexandru Paraschiv", mondayUserId: 74108550 },
-            { id: 202, name: "Denisa Ionescu", mondayUserId: 74108553 },
-            { id: 203, name: "Andrei Pauna", mondayUserId: 73046350 },
-            { id: 204, name: "Nedelcu Alexandru", mondayUserId: 77987246 },
-            { id: 205, name: "Christiana Sora", mondayUserId: 90770132 },
-            { id: 206, name: "Vlad Serbanescu", mondayUserId: 90770137 },
-            { id: 207, name: "Marian Gagiu", mondayUserId: 96280243 },
-            { id: 208, name: "Eduard Grigore", mondayUserId: 96568397 }
+            { id: 201, name: "Alexandru Paraschiv", mondayUserId: 74108550, target: 3300 },
+            { id: 202, name: "Denisa Ionescu", mondayUserId: 74108553, target: 2112 },
+            { id: 203, name: "Andrei Pauna", mondayUserId: 73046350, target: 3400 },
+            { id: 204, name: "Nedelcu Alexandru", mondayUserId: 77987246, target: 3630 },
+            { id: 205, name: "Christiana Sora", mondayUserId: 90770132, target: 2310 },
+            { id: 208, name: "Eduard Grigore", mondayUserId: 96568397, target: 2100 }
         ]
     },
     operational: {
         name: "Operațiuni",
         employees: [
-            { id: 103, name: "David Popescu", mondayUserId: 74695692 },
-            { id: 104, name: "Roberto Coica", mondayUserId: 74668675 },
-            { id: 105, name: "Dumitru Ionut", mondayUserId: 74668676 },
-            { id: 106, name: "Robert Florea", mondayUserId: 74668678 },
-            { id: 107, name: "Alexandra Ghiurca", mondayUserId: 96280239 },
-            { id: 108, name: "David Mitrica", mondayUserId: 89227837 },
-            { id: 109, name: "Mocanu George", mondayUserId: 96568400 }
+            { id: 103, name: "David Popescu", mondayUserId: 74695692, target: 3485 },
+            { id: 104, name: "Roberto Coica", mondayUserId: 74668675, target: 3240 },
+            { id: 105, name: "Dumitru Ionut", mondayUserId: 74668676, target: 3240 },
+            { id: 106, name: "Robert Florea", mondayUserId: 74668678, target: 4590 },
+            { id: 107, name: "Alexandra Ghiurca", mondayUserId: 96280239, target: 3040 },
+            { id: 108, name: "David Mitrica", mondayUserId: 89227837, target: 1920 },
+            { id: 109, name: "Mocanu George", mondayUserId: 96568400, target: 3040 }
         ]
     }
 };
+
 
 // --- HELPER FUNCTIONS ---
 const formatCurrency = (val) => {
@@ -145,14 +144,14 @@ const extractNumericValue = (columnValue) => {
                 if (typeof parsed.value === 'number') return parsed.value;
                 valStr = String(parsed.value);
             }
-        } catch(e) {}
+        } catch (e) { }
     }
     if (!valStr) {
         if (columnValue.display_value) valStr = String(columnValue.display_value);
         else if (columnValue.text) valStr = columnValue.text;
     }
     if (!valStr || valStr === "null") return 0;
-    
+
     // Cleaning
     if (valStr.includes('(') && valStr.includes(')')) {
         valStr = '-' + valStr.replace(/[()]/g, '');
@@ -161,7 +160,7 @@ const extractNumericValue = (columnValue) => {
     let clean = valStr.replace(/\s+/g, '');
     // Keep only digits, dots, commas, minus
     clean = clean.replace(/[^0-9.,-]/g, '');
-    
+
     if (!clean) return 0;
 
     if (clean.includes('.') && clean.includes(',')) {
@@ -193,7 +192,7 @@ const fetchAllItems = async (boardId, colIdsArray, rulesString = null) => {
     let allItems = [];
     let cursor = null;
     let hasMore = true;
-    
+
     const colsString = colIdsArray.map(c => `"${c}"`).join(", ");
 
     while (hasMore) {
@@ -229,109 +228,111 @@ const fetchAllItems = async (boardId, colIdsArray, rulesString = null) => {
         let attempts = 0;
         let success = false;
         let json;
-        
-        while(attempts < 3 && !success) {
+
+        while (attempts < 3 && !success) {
             try {
                 const response = await fetch("https://api.monday.com/v2", {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': API_KEY
+                        'Authorization': API_KEY,
+                        'API-Version': '2025-04'
                     },
                     body: JSON.stringify({ query })
                 });
-                
+
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 json = await response.json();
                 success = true;
-            } catch(e) {
+            } catch (e) {
                 attempts++;
-                if(attempts >= 3) throw e;
+                if (attempts >= 3) throw e;
                 await new Promise(r => setTimeout(r, 1000 * attempts));
             }
         }
 
         if (json.errors) throw new Error(json.errors[0].message);
-        
+
         const data = json.data?.boards?.[0]?.items_page;
         if (!data) break;
 
         allItems = [...allItems, ...data.items];
         cursor = data.cursor;
-        
+
         if (!cursor) hasMore = false;
     }
-    
+
     return { items_page: { items: allItems } };
 };
 
 const fetchItemsDirectory = async (boardId, ownerColId, rulesString = null, options = {}) => {
-  const {
-    pageLimit = 500,     // monday limit per page (500 e ok pentru directory)
-    maxPages = 50,       // siguranță: nu vrei scanare infinită
-    maxItems = 20000,    // siguranță: plafon total itemi
-    retries = 3,         // retry la erori de rețea / 429 / 5xx
-    retryBaseMs = 800,   // backoff de bază
-  } = options;
+    const {
+        pageLimit = 500,     // monday limit per page (500 e ok pentru directory)
+        maxPages = 50,       // siguranță: nu vrei scanare infinită
+        maxItems = 20000,    // siguranță: plafon total itemi
+        retries = 3,         // retry la erori de rețea / 429 / 5xx
+        retryBaseMs = 800,   // backoff de bază
+    } = options;
 
-  const allItems = [];
-  let cursor = null;
+    const allItems = [];
+    let cursor = null;
 
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  const doRequest = async (query) => {
-    let lastErr;
+    const doRequest = async (query) => {
+        let lastErr;
 
-    for (let attempt = 1; attempt <= retries; attempt++) {
-      try {
-        const res = await fetch("https://api.monday.com/v2", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": API_KEY,
-          },
-          body: JSON.stringify({ query }),
-        });
+        for (let attempt = 1; attempt <= retries; attempt++) {
+            try {
+                const res = await fetch("https://api.monday.com/v2", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": API_KEY,
+                        'API-Version': '2025-04'
+                    },
+                    body: JSON.stringify({ query }),
+                });
 
-        // monday poate răspunde cu 429 sau 5xx
-        if (!res.ok) {
-          const text = await res.text().catch(() => "");
-          throw new Error(`HTTP ${res.status} ${res.statusText} ${text}`.trim());
+                // monday poate răspunde cu 429 sau 5xx
+                if (!res.ok) {
+                    const text = await res.text().catch(() => "");
+                    throw new Error(`HTTP ${res.status} ${res.statusText} ${text}`.trim());
+                }
+
+                const json = await res.json();
+
+                if (json.errors?.length) {
+                    throw new Error(json.errors[0]?.message || "Monday GraphQL error");
+                }
+
+                return json;
+            } catch (e) {
+                lastErr = e;
+                if (attempt < retries) {
+                    // backoff + jitter
+                    const backoff = retryBaseMs * attempt + Math.floor(Math.random() * 250);
+                    await sleep(backoff);
+                    continue;
+                }
+            }
         }
 
-        const json = await res.json();
+        throw lastErr;
+    };
 
-        if (json.errors?.length) {
-          throw new Error(json.errors[0]?.message || "Monday GraphQL error");
+    for (let page = 1; page <= maxPages; page++) {
+        // NOTE:
+        // - query_params (rules) se pune DOAR la primul call (cursor = null)
+        // - după aceea cursor-ul continuă în același set filtrat
+        let args = `limit: ${pageLimit}`;
+        if (cursor) {
+            args += `, cursor: "${cursor}"`;
+        } else if (rulesString) {
+            args += `, query_params: { rules: ${rulesString} }`;
         }
 
-        return json;
-      } catch (e) {
-        lastErr = e;
-        if (attempt < retries) {
-          // backoff + jitter
-          const backoff = retryBaseMs * attempt + Math.floor(Math.random() * 250);
-          await sleep(backoff);
-          continue;
-        }
-      }
-    }
-
-    throw lastErr;
-  };
-
-  for (let page = 1; page <= maxPages; page++) {
-    // NOTE:
-    // - query_params (rules) se pune DOAR la primul call (cursor = null)
-    // - după aceea cursor-ul continuă în același set filtrat
-    let args = `limit: ${pageLimit}`;
-    if (cursor) {
-      args += `, cursor: "${cursor}"`;
-    } else if (rulesString) {
-      args += `, query_params: { rules: ${rulesString} }`;
-    }
-
-    const query = `query {
+        const query = `query {
       boards (ids: [${boardId}]) {
         items_page (${args}) {
           cursor
@@ -346,21 +347,21 @@ const fetchItemsDirectory = async (boardId, ownerColId, rulesString = null, opti
       }
     }`;
 
-    const json = await doRequest(query);
+        const json = await doRequest(query);
 
-    const pageData = json.data?.boards?.[0]?.items_page;
-    const items = pageData?.items || [];
+        const pageData = json.data?.boards?.[0]?.items_page;
+        const items = pageData?.items || [];
 
-    if (items.length) {
-      allItems.push(...items);
-      if (allItems.length >= maxItems) break;
+        if (items.length) {
+            allItems.push(...items);
+            if (allItems.length >= maxItems) break;
+        }
+
+        cursor = pageData?.cursor || null;
+        if (!cursor) break; // nu mai sunt pagini
     }
 
-    cursor = pageData?.cursor || null;
-    if (!cursor) break; // nu mai sunt pagini
-  }
-
-  return { items_page: { items: allItems } };
+    return { items_page: { items: allItems } };
 };
 
 
@@ -372,7 +373,7 @@ const fetchColumns = async (boardId) => {
     }`;
     const response = await fetch("https://api.monday.com/v2", {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': API_KEY },
+        headers: { 'Content-Type': 'application/json', 'Authorization': API_KEY, 'API-Version': '2025-04' },
         body: JSON.stringify({ query })
     });
     const json = await response.json();
@@ -380,50 +381,227 @@ const fetchColumns = async (boardId) => {
 };
 
 const fetchActivitiesForItems = async (itemIds, start, end) => {
-    const CHUNK_SIZE = 15; 
-    const results = [];
+    // ===== Config =====
+    const CHUNK_SIZE = 10;
+    const PAGE_LIMIT = 50;
+    const MAX_PAGES_PER_ITEM = 30;
+
+    const RETRIES = 4;
+    const RETRY_BASE_MS = 800;
+
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
     const startTime = start.getTime();
     const endTime = end.getTime();
-    
+
+    const toISO = (d) => {
+        // Monday returnează de obicei ISO; noi comparăm local numeric.
+        // Nu trimitem neapărat intervalul la server (depinde de endpoint), filtrăm sigur client-side.
+        return new Date(d).toISOString();
+    };
+
+    const isRetryableHttp = (status) => status === 429 || (status >= 500 && status <= 599);
+
+    const doRequest = async (query) => {
+        let lastErr;
+
+        for (let attempt = 1; attempt <= RETRIES; attempt++) {
+            try {
+                const res = await fetch("https://api.monday.com/v2", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": API_KEY,
+                        "API-Version": "2025-04",
+                    },
+                    body: JSON.stringify({ query }),
+                });
+
+                if (!res.ok) {
+                    const text = await res.text().catch(() => "");
+                    const err = new Error(`HTTP ${res.status} ${res.statusText} ${text}`.trim());
+                    err._retryable = isRetryableHttp(res.status);
+                    throw err;
+                }
+
+                const json = await res.json();
+
+                if (json.errors?.length) {
+                    const e = new Error(json.errors[0]?.message || "Monday GraphQL error");
+                    // Unele erori GraphQL pot fi temporare, dar de obicei nu.
+                    e._retryable = false;
+                    throw e;
+                }
+
+                return json;
+            } catch (e) {
+                lastErr = e;
+                const retryable = e?._retryable === true || e.name === "TypeError";
+                if (attempt < RETRIES && retryable) {
+                    const backoff = RETRY_BASE_MS * attempt + Math.floor(Math.random() * 250);
+                    await sleep(backoff);
+                    continue;
+                }
+                break;
+            }
+        }
+
+        throw lastErr;
+    };
+
+    // Normalizează user id din mai multe forme posibile (depinde de tipul de event din Monday)
+    const normalizeUserId = (timelineItem) => {
+        if (!timelineItem) return null;
+
+        // forme comune
+        if (timelineItem.user_id != null) return String(timelineItem.user_id);
+        if (timelineItem.creator_id != null) return String(timelineItem.creator_id);
+        if (timelineItem.user?.id != null) return String(timelineItem.user.id);
+
+        // uneori userul e îngropat în data (string JSON)
+        const dataVal = timelineItem.data ?? timelineItem.value ?? null;
+        if (typeof dataVal === "string" && dataVal.trim().startsWith("{")) {
+            try {
+                const parsed = JSON.parse(dataVal);
+                if (parsed.user_id != null) return String(parsed.user_id);
+                if (parsed.creator_id != null) return String(parsed.creator_id);
+                if (parsed.user?.id != null) return String(parsed.user.id);
+            } catch (_) { }
+        }
+        if (typeof dataVal === "object" && dataVal) {
+            if (dataVal.user_id != null) return String(dataVal.user_id);
+            if (dataVal.creator_id != null) return String(dataVal.creator_id);
+            if (dataVal.user?.id != null) return String(dataVal.user.id);
+        }
+
+        return null;
+    };
+
+    const normalizeCreatedAtMs = (timelineItem) => {
+        const raw = timelineItem?.created_at || timelineItem?.createdAt || null;
+        if (!raw) return NaN;
+        const t = new Date(raw).getTime();
+        return Number.isNaN(t) ? NaN : t;
+    };
+
+    // Extrage items + cursor, indiferent de variații minore ale structurii
+    const extractPage = (timelineObj) => {
+        const items =
+            Array.isArray(timelineObj?.timeline_items) ? timelineObj.timeline_items :
+                Array.isArray(timelineObj?.timeline_items_page?.timeline_items) ? timelineObj.timeline_items_page.timeline_items :
+                    [];
+
+        const cursor =
+            timelineObj?.timeline_items_page?.cursor ??
+            timelineObj?.cursor ??
+            null;
+
+        return { items, cursor };
+    };
+
+    const results = [];
+
     for (let i = 0; i < itemIds.length; i += CHUNK_SIZE) {
         const chunk = itemIds.slice(i, i + CHUNK_SIZE);
-        const queryBody = chunk.map((id, idx) => `
-            t_${id}: timeline(id: ${id}) {
-                timeline_items_page {
-                    timeline_items {
-                        type
-                        created_at
-                        user { id }
+
+        // cursor per item
+        const state = new Map(
+            chunk.map((id) => [String(id), { cursor: null, done: false, pages: 0 }])
+        );
+
+        let guard = 0;
+
+        while (true) {
+            guard++;
+            if (guard > MAX_PAGES_PER_ITEM * chunk.length + 10) break;
+
+            const pending = [];
+            state.forEach((st, id) => {
+                if (!st.done && st.pages < MAX_PAGES_PER_ITEM) pending.push({ id, ...st });
+                if (st.pages >= MAX_PAGES_PER_ITEM) st.done = true;
+            });
+
+            if (pending.length === 0) break;
+
+            // Query cu alias-uri ca să cerem mai multe item-uri dintr-un foc
+            const body = pending
+                .map(({ id, cursor }) => {
+                    const cursorArg = cursor ? `, cursor: "${cursor}"` : "";
+                    // IMPORTANT: cerem mai multe câmpuri ca să putem normaliza user-ul corect
+                    return `
+                        t_${id}: timeline(id: ${id}) {
+                            timeline_items_page(limit: ${PAGE_LIMIT}${cursorArg}) {
+                            cursor
+                            timeline_items {
+                            id
+                            type
+                            created_at
+                            user_id
+                            creator_id
+                            data
+                            title
+                            user { id }
+                        }
+                        }
+                    }
+                    `;
+
+                })
+                .join("\n");
+
+            const query = `query { ${body} }`;
+
+            let json;
+            try {
+                json = await doRequest(query);
+            } catch (e) {
+                console.warn("fetchActivitiesForItems failed on chunk:", e);
+                break; // nu blocăm total; ieșim din chunk
+            }
+
+            const data = json?.data || {};
+
+            for (const [alias, timelineObj] of Object.entries(data)) {
+                const itemId = alias.startsWith("t_") ? alias.slice(2) : alias;
+                const st = state.get(String(itemId));
+                if (!st) continue;
+
+                const { items, cursor } = extractPage(timelineObj);
+
+                for (const it of items) {
+                    const createdMs = normalizeCreatedAtMs(it);
+                    if (!Number.isNaN(createdMs) && createdMs >= startTime && createdMs <= endTime) {
+                        const uid = normalizeUserId(it);
+
+                        // întoarcem un format stabil pentru restul codului tău
+                        results.push({
+                            item_id: String(itemId),
+                            activity_id: it.id != null ? String(it.id) : undefined,
+                            type: it.type || "unknown",
+                            created_at: it.created_at,
+                            user_id: uid,          // <-- cheie IMPORTANTĂ
+                            title: it.title || "",
+                            raw: it,               // util la debug; poți scoate după ce confirmi
+                        });
                     }
                 }
+
+                st.pages += 1;
+
+                // done dacă nu mai există cursor sau nu mai vin items
+                if (!cursor || items.length === 0) {
+                    st.done = true;
+                    st.cursor = null;
+                } else {
+                    st.cursor = cursor;
+                }
+
+                state.set(String(itemId), st);
             }
-        `).join('\n');
-        
-        const query = `query { ${queryBody} }`;
-        
-        try {
-            const response = await fetch("https://api.monday.com/v2", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': API_KEY },
-                body: JSON.stringify({ query })
-            });
-            const json = await response.json();
-            if (json.data) {
-                    Object.values(json.data).forEach(tData => {
-                        if (tData?.timeline_items_page?.timeline_items) {
-                            results.push(...tData.timeline_items_page.timeline_items);
-                        }
-                    });
-            }
-        } catch(e) {
-            console.warn("Error fetching activities chunk:", e);
         }
     }
-    
-    return results.filter(item => {
-        const itemTime = new Date(item.created_at).getTime();
-        return itemTime >= startTime && itemTime <= endTime;
-    });
+
+    return results;
 };
 
 // --- COMPONENTE UI ---
@@ -434,19 +612,19 @@ const OperationalRowCells = ({ row, showSalesMetrics = false }) => {
     const totalCountLivr = safeVal(row.livr_principalCount) + safeVal(row.livr_secondaryCount);
     const totalProfitEurLivr = safeVal(row.livr_principalProfitEur) + safeVal(row.livr_secondaryProfitEur);
 
-    const target = 0;
+    const target = safeVal(row.target);
     const bonus = totalProfitEurCtr - target;
 
     const qualified = safeVal(row.calificat);
     const contacted = safeVal(row.contactat);
-    const rataConversieClienti = (qualified + contacted) > 0 
-        ? ((qualified / (qualified + contacted)) * 100).toFixed(1) 
+    const rataConversieClienti = (qualified + contacted) > 0
+        ? ((qualified / (qualified + contacted)) * 100).toFixed(1)
         : "0.0";
-    
+
     const solicitari = safeVal(row.solicitariCount);
     const websiteCount = safeVal(row.websiteCount);
-    const conversionRateWebsite = solicitari > 0 
-        ? ((websiteCount / solicitari) * 100).toFixed(1) 
+    const conversionRateWebsite = solicitari > 0
+        ? ((websiteCount / solicitari) * 100).toFixed(1)
         : (websiteCount > 0 ? "100.0" : "0.0");
 
     const avgClientTerm = row.countClientTerms > 0 ? (row.sumClientTerms / row.countClientTerms) : 0;
@@ -467,7 +645,7 @@ const OperationalRowCells = ({ row, showSalesMetrics = false }) => {
             )}
             <td className="px-2 py-2 text-center text-slate-700 font-medium border-r">{safeVal(row.suppliersAdded)}</td>
             <td className="px-2 py-2 text-center bg-blue-50/30 text-slate-700">{safeVal(row.ctr_principalCount)}</td>
-            <td className="px-2 py-2 text-center bg-blue-50/30">{formatCurrency(safeVal(row.ctr_principalProfitEur))}</td> 
+            <td className="px-2 py-2 text-center bg-blue-50/30">{formatCurrency(safeVal(row.ctr_principalProfitEur))}</td>
             <td className="px-2 py-2 text-center text-slate-600">{safeVal(row.ctr_secondaryCount)}</td>
             <td className="px-2 py-2 text-center text-slate-600">{formatCurrency(safeVal(row.ctr_secondaryProfitEur))}</td>
             <td className="px-2 py-2 text-center font-bold bg-blue-100/50">{safeVal(totalCountCtr)}</td>
@@ -554,7 +732,7 @@ const TableFooter = ({ data, showSalesMetrics }) => {
     const rateConvClients = totalLeads > 0 ? (totals.calificat / totalLeads) * 100 : 0;
     const rateConvWeb = totals.solicitariCount > 0 ? (totals.websiteCount / totals.solicitariCount) * 100 : 0;
     const avg = (val) => val / count;
-    const targetTotal = 0;
+    const targetTotal = data.reduce((s, r) => s + safeVal(r.target), 0);
     const bonusTotal = totalCtrProfit - targetTotal;
     const bonusAvg = bonusTotal / count;
 
@@ -580,21 +758,21 @@ const TableFooter = ({ data, showSalesMetrics }) => {
                     </>
                 )}
                 <td className="px-2 py-2 text-center border-r">{totals.suppliersAdded}</td>
-                
+
                 <td className="px-2 py-2 text-center">{totals.ctr_principalCount}</td>
                 <td className="px-2 py-2 text-center">{formatCurrency(totals.ctr_principalProfitEur)}</td>
                 <td className="px-2 py-2 text-center">{totals.ctr_secondaryCount}</td>
                 <td className="px-2 py-2 text-center">{formatCurrency(totals.ctr_secondaryProfitEur)}</td>
                 <td className="px-2 py-2 text-center">{totalCtrCount}</td>
                 <td className="px-2 py-2 text-center border-r">{formatCurrency(totalCtrProfit)}</td>
-                
+
                 <td className="px-2 py-2 text-center">{totals.livr_principalCount}</td>
                 <td className="px-2 py-2 text-center">{formatCurrency(totals.livr_principalProfitEur)}</td>
                 <td className="px-2 py-2 text-center">{totals.livr_secondaryCount}</td>
                 <td className="px-2 py-2 text-center">{formatCurrency(totals.livr_secondaryProfitEur)}</td>
                 <td className="px-2 py-2 text-center">{totalLivrCount}</td>
                 <td className="px-2 py-2 text-center border-r">{formatCurrency(totalLivrProfit)}</td>
-                
+
                 <td className="px-2 py-2 text-center">{formatCurrency(targetTotal)}</td>
                 <td className="px-2 py-2 text-center border-r text-green-700">{formatCurrency(bonusTotal)}</td>
 
@@ -607,7 +785,7 @@ const TableFooter = ({ data, showSalesMetrics }) => {
 
                 <td className="px-2 py-2 text-center">{totals.solicitariCount}</td>
                 <td className="px-2 py-2 text-center">{formatNumber(rateConvWeb)}%</td>
-                
+
                 <td className="px-2 py-2 text-center">{formatNumber(avgClientTerm)}</td>
                 <td className="px-2 py-2 text-center">{formatNumber(avgSupplierTerm)}</td>
                 <td className="px-2 py-2 text-center text-red-600">{totals.overdueInvoicesCount}</td>
@@ -626,25 +804,25 @@ const TableFooter = ({ data, showSalesMetrics }) => {
                     </>
                 )}
                 <td className="px-2 py-2 text-center border-r">{formatNumber(avg(totals.suppliersAdded))}</td>
-                
+
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totals.ctr_principalCount))}</td>
                 <td className="px-2 py-2 text-center">{formatCurrency(avg(totals.ctr_principalProfitEur))}</td>
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totals.ctr_secondaryCount))}</td>
                 <td className="px-2 py-2 text-center">{formatCurrency(avg(totals.ctr_secondaryProfitEur))}</td>
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totalCtrCount))}</td>
                 <td className="px-2 py-2 text-center border-r">{formatCurrency(avg(totalCtrProfit))}</td>
-                
+
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totals.livr_principalCount))}</td>
                 <td className="px-2 py-2 text-center">{formatCurrency(avg(totals.livr_principalProfitEur))}</td>
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totals.livr_secondaryCount))}</td>
                 <td className="px-2 py-2 text-center">{formatCurrency(avg(totals.livr_secondaryProfitEur))}</td>
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totalLivrCount))}</td>
                 <td className="px-2 py-2 text-center border-r">{formatCurrency(avg(totalLivrProfit))}</td>
-                
-                <td className="px-2 py-2 text-center">{formatCurrency(0)}</td>
+
+                <td className="px-2 py-2 text-center">{formatCurrency(targetTotal / count)}</td>
                 <td className="px-2 py-2 text-center border-r text-green-700">{formatCurrency(bonusAvg)}</td>
 
-                <td className="px-2 py-2 text-center border-l border-r">-</td>
+                <td className="px-2 py-2 text-center border-l border-r">{formatNumber(avgProfitability)}%</td>
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totals.websiteCount))}</td>
                 <td className="px-2 py-2 text-center border-r">{formatCurrency(avg(totals.websiteProfit))}</td>
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totals.websiteCountSec))}</td>
@@ -653,7 +831,7 @@ const TableFooter = ({ data, showSalesMetrics }) => {
 
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totals.solicitariCount))}</td>
                 <td className="px-2 py-2 text-center">-</td>
-                
+
                 <td className="px-2 py-2 text-center">-</td>
                 <td className="px-2 py-2 text-center">-</td>
                 <td className="px-2 py-2 text-center">{formatNumber(avg(totals.overdueInvoicesCount))}</td>
@@ -668,12 +846,12 @@ const TableHeader = ({ showSalesMetrics }) => (
     <thead className="text-[10px] uppercase bg-slate-100 border-b border-slate-200 text-slate-600">
         <tr>
             <th className="px-3 py-3 font-bold sticky left-0 bg-slate-100 z-10 border-r shadow-sm">Angajat</th>
-            
+
             {showSalesMetrics && (
                 <React.Fragment>
-                    <th className="px-2 py-3 text-center bg-yellow-100/50">Contactați<br/>Tel</th>
+                    <th className="px-2 py-3 text-center bg-yellow-100/50">Contactați<br />Tel</th>
                     <th className="px-2 py-3 text-center bg-yellow-100/50">Calificați</th>
-                    <th className="px-2 py-3 text-center bg-yellow-100/50 border-r text-blue-700 font-bold">Rată conv.<br/>Clienti</th>
+                    <th className="px-2 py-3 text-center bg-yellow-100/50 border-r text-blue-700 font-bold">Rată conv.<br />Clienti</th>
                     <th className="px-2 py-3 text-center bg-indigo-50 text-indigo-900">Email-uri</th>
                     <th className="px-2 py-3 text-center bg-indigo-50 text-indigo-900 border-r">Apeluri</th>
                 </React.Fragment>
@@ -684,7 +862,7 @@ const TableHeader = ({ showSalesMetrics }) => (
             <th colSpan={6} className="px-2 py-2 text-center bg-blue-50 border-b border-blue-200 border-r text-blue-800 font-bold">
                 După Data Contract
             </th>
-            
+
             <th colSpan={6} className="px-2 py-2 text-center bg-green-50 border-b border-green-200 border-r text-green-800 font-bold">
                 După Data Livrare
             </th>
@@ -692,27 +870,27 @@ const TableHeader = ({ showSalesMetrics }) => (
             <th className="px-2 py-3 text-center bg-blue-50/30 text-blue-900 border-b border-blue-200">Target</th>
             <th className="px-2 py-3 text-center bg-blue-100/50 text-green-800 border-b border-blue-200 border-r">Profit peste target</th>
 
-            <th className="px-2 py-3 text-center bg-blue-50 text-blue-800">Profitabilitate<br/>%</th>
-            <th className="px-2 py-3 text-center">Curse<br/>Web Pr.</th>
-            <th className="px-2 py-3 text-center border-r">Profit<br/>Web Pr.</th>
-            
-            <th className="px-2 py-3 text-center bg-purple-50/30">Curse<br/>Web Sec.</th>
-            <th className="px-2 py-3 text-center bg-purple-50/30 border-r">Profit<br/>Web Sec.</th>
+            <th className="px-2 py-3 text-center bg-blue-50 text-blue-800">Profitabilitate<br />%</th>
+            <th className="px-2 py-3 text-center">Curse<br />Web Pr.</th>
+            <th className="px-2 py-3 text-center border-r">Profit<br />Web Pr.</th>
 
-            <th className="px-2 py-3 text-center bg-orange-50/30 border-r text-orange-800">Curse<br/>Burse</th>
+            <th className="px-2 py-3 text-center bg-purple-50/30">Curse<br />Web Sec.</th>
+            <th className="px-2 py-3 text-center bg-purple-50/30 border-r">Profit<br />Web Sec.</th>
 
-            <th className="px-2 py-3 text-center bg-purple-50">Solicitări<br/>Web</th>
-            <th className="px-2 py-3 text-center">Conv. Web<br/>%</th>
-            <th className="px-2 py-3 text-center">Termen Mediu<br/>Plată Client</th>
-            <th className="px-2 py-3 text-center">Termen Mediu<br/>Plată Furnizor</th>
-            <th className="px-2 py-3 text-center text-red-600">Întârzieri<br/>Client {'>'}15</th>
-            <th className="px-2 py-3 text-center bg-orange-50 text-orange-800">Furn.<br/>{'<'}30</th>
-            <th className="px-2 py-3 text-center bg-orange-50 text-orange-800">Furn.<br/>{'>='}30</th>
+            <th className="px-2 py-3 text-center bg-orange-50/30 border-r text-orange-800">Curse<br />Burse</th>
+
+            <th className="px-2 py-3 text-center bg-purple-50">Solicitări<br />Web</th>
+            <th className="px-2 py-3 text-center">Conv. Web<br />%</th>
+            <th className="px-2 py-3 text-center">Termen Mediu<br />Plată Client</th>
+            <th className="px-2 py-3 text-center">Termen Mediu<br />Plată Furnizor</th>
+            <th className="px-2 py-3 text-center text-red-600">Întârzieri<br />Client {'>'}15</th>
+            <th className="px-2 py-3 text-center bg-orange-50 text-orange-800">Furn.<br />{'<'}30</th>
+            <th className="px-2 py-3 text-center bg-orange-50 text-orange-800">Furn.<br />{'>='}30</th>
         </tr>
         <tr>
             <th className="sticky left-0 bg-slate-100 z-10 border-r"></th>
-            {showSalesMetrics && <React.Fragment><th className="bg-yellow-100/50"/><th className="bg-yellow-100/50"/><th className="bg-yellow-100/50 border-r"/><th className="bg-indigo-50"/><th className="bg-indigo-50 border-r"/></React.Fragment>}
-            <th className="border-r"/>
+            {showSalesMetrics && <React.Fragment><th className="bg-yellow-100/50" /><th className="bg-yellow-100/50" /><th className="bg-yellow-100/50 border-r" /><th className="bg-indigo-50" /><th className="bg-indigo-50 border-r" /></React.Fragment>}
+            <th className="border-r" />
 
             <th className="px-1 py-2 text-center bg-blue-50/30">Curse Pr.</th>
             <th className="px-1 py-2 text-center bg-blue-50/30">Profit Pr.</th>
@@ -742,19 +920,19 @@ const CompanyTable = ({ stats }) => {
         // ... (not used, keeping for structure if needed later)
         return null;
     };
-    
+
     // Function to calculate %
     const calcPct = (count, total) => total > 0 ? ((count / total) * 100).toFixed(1) + "%" : "0.0%";
-    
+
     // Helper to render a section of rows for a specific breakdown
     const renderBreakdownSection = (title, fieldKey) => {
         // Collect all unique keys from both CTR and LIVR
         const ctrData = stats.ctr.breakdowns?.[fieldKey] || {};
         const livrData = stats.livr.breakdowns?.[fieldKey] || {};
         const allKeys = new Set([...Object.keys(ctrData), ...Object.keys(livrData)]);
-        
+
         if (allKeys.size === 0) return null;
-        
+
         return (
             <>
                 <tr className="bg-gray-200"><td colSpan="3" className="font-bold text-xs uppercase px-4 py-1">{title}</td></tr>
@@ -775,57 +953,57 @@ const CompanyTable = ({ stats }) => {
 
     return (
         <div className="overflow-x-auto bg-white rounded-lg shadow border border-slate-200 mt-8">
-             <div className="p-4 border-b border-slate-200 bg-slate-800 text-white">
+            <div className="p-4 border-b border-slate-200 bg-slate-800 text-white">
                 <h3 className="font-bold">Total Companie (Global)</h3>
             </div>
             <table className="w-full text-sm text-left text-slate-800">
                 <thead className="bg-slate-100 border-b border-slate-300">
                     <tr>
-                         <th className="px-4 py-3">Metrică</th>
-                         <th className="px-4 py-3 text-right">După Data Contract</th>
-                         <th className="px-4 py-3 text-right">După Data Livrare</th>
+                        <th className="px-4 py-3">Metrică</th>
+                        <th className="px-4 py-3 text-right">După Data Contract</th>
+                        <th className="px-4 py-3 text-right">După Data Livrare</th>
                     </tr>
                 </thead>
                 <tbody>
-                     <tr className="border-b bg-blue-50">
-                         <td className="px-4 py-3 font-bold">Număr Total Curse</td>
-                         <td className="px-4 py-3 text-right font-bold">{stats.ctr.count}</td>
-                         <td className="px-4 py-3 text-right font-bold">{stats.livr.count}</td>
-                     </tr>
-                     <tr className="border-b">
-                         <td className="px-4 py-3 font-bold">Profit Total (EUR)</td>
-                         <td className="px-4 py-3 text-right font-bold text-green-700">{formatCurrency(stats.ctr.profit)}</td>
-                         <td className="px-4 py-3 text-right font-bold text-green-700">{formatCurrency(stats.livr.profit)}</td>
-                     </tr>
-                     <tr className="border-b">
-                         <td className="px-4 py-3">Website / Fix - Curse</td>
-                         <td className="px-4 py-3 text-right">{stats.ctr.websiteCount}</td>
-                         <td className="px-4 py-3 text-right">{stats.livr.websiteCount}</td>
-                     </tr>
-                     <tr className="border-b">
-                         <td className="px-4 py-3">Website / Fix - Profit</td>
-                         <td className="px-4 py-3 text-right">{formatCurrency(stats.ctr.websiteProfit)}</td>
-                         <td className="px-4 py-3 text-right">{formatCurrency(stats.livr.websiteProfit)}</td>
-                     </tr>
-                     <tr className="border-b">
-                         <td className="px-4 py-3">Burse - Curse</td>
-                         <td className="px-4 py-3 text-right">{stats.ctr.burseCount}</td>
-                         <td className="px-4 py-3 text-right">{stats.livr.burseCount}</td>
-                     </tr>
-                     
-                     {/* BREAKDOWNS */}
-                     {renderBreakdownSection("Tip serviciu", "STATUS_CTR")}
-                     {renderBreakdownSection("Dep", "DEP")}
-                     {renderBreakdownSection("Status Plata Client", "STATUS_PLATA_CLIENT")}
-                     {renderBreakdownSection("Moneda Cursa", "MONEDA")}
-                     {renderBreakdownSection("Sursa Client", "SURSA")}
-                     {renderBreakdownSection("Implicare", "IMPLICARE")}
-                     {renderBreakdownSection("Client Pe", "CLIENT_PE")}
-                     {renderBreakdownSection("Furnizor Pe", "FURNIZ_PE")}
-                     {renderBreakdownSection("Client/Furnizor Pe", "CLIENT_FURNIZOR_PE")}
-                     {renderBreakdownSection("Mod Transport", "MOD_TRANSPORT")}
-                     {renderBreakdownSection("Tip Marfa", "TIP_MARFA")}
-                     {renderBreakdownSection("Ocupare Mij Transport", "OCUPARE")}
+                    <tr className="border-b bg-blue-50">
+                        <td className="px-4 py-3 font-bold">Număr Total Curse</td>
+                        <td className="px-4 py-3 text-right font-bold">{stats.ctr.count}</td>
+                        <td className="px-4 py-3 text-right font-bold">{stats.livr.count}</td>
+                    </tr>
+                    <tr className="border-b">
+                        <td className="px-4 py-3 font-bold">Profit Total (EUR)</td>
+                        <td className="px-4 py-3 text-right font-bold text-green-700">{formatCurrency(stats.ctr.profit)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-green-700">{formatCurrency(stats.livr.profit)}</td>
+                    </tr>
+                    <tr className="border-b">
+                        <td className="px-4 py-3">Website / Fix - Curse</td>
+                        <td className="px-4 py-3 text-right">{stats.ctr.websiteCount}</td>
+                        <td className="px-4 py-3 text-right">{stats.livr.websiteCount}</td>
+                    </tr>
+                    <tr className="border-b">
+                        <td className="px-4 py-3">Website / Fix - Profit</td>
+                        <td className="px-4 py-3 text-right">{formatCurrency(stats.ctr.websiteProfit)}</td>
+                        <td className="px-4 py-3 text-right">{formatCurrency(stats.livr.websiteProfit)}</td>
+                    </tr>
+                    <tr className="border-b">
+                        <td className="px-4 py-3">Burse - Curse</td>
+                        <td className="px-4 py-3 text-right">{stats.ctr.burseCount}</td>
+                        <td className="px-4 py-3 text-right">{stats.livr.burseCount}</td>
+                    </tr>
+
+                    {/* BREAKDOWNS */}
+                    {renderBreakdownSection("Tip serviciu", "STATUS_CTR")}
+                    {renderBreakdownSection("Dep", "DEP")}
+                    {renderBreakdownSection("Status Plata Client", "STATUS_PLATA_CLIENT")}
+                    {renderBreakdownSection("Moneda Cursa", "MONEDA")}
+                    {renderBreakdownSection("Sursa Client", "SURSA")}
+                    {renderBreakdownSection("Implicare", "IMPLICARE")}
+                    {renderBreakdownSection("Client Pe", "CLIENT_PE")}
+                    {renderBreakdownSection("Furnizor Pe", "FURNIZ_PE")}
+                    {renderBreakdownSection("Client/Furnizor Pe", "CLIENT_FURNIZOR_PE")}
+                    {renderBreakdownSection("Mod Transport", "MOD_TRANSPORT")}
+                    {renderBreakdownSection("Tip Marfa", "TIP_MARFA")}
+                    {renderBreakdownSection("Ocupare Mij Transport", "OCUPARE")}
                 </tbody>
             </table>
         </div>
@@ -895,7 +1073,7 @@ const OperationalTable = ({ data, dateRange }) => {
 const SalesTable = ({ data, dateRange }) => {
     return (
         <div className="overflow-x-auto bg-white rounded-lg shadow border border-slate-200">
-             <div className="p-4 border-b border-slate-200 bg-slate-50">
+            <div className="p-4 border-b border-slate-200 bg-slate-50">
                 <h3 className="font-bold text-slate-800">
                     Departamentul de Vânzări în intervalul: {dateRange}
                 </h3>
@@ -903,12 +1081,12 @@ const SalesTable = ({ data, dateRange }) => {
             <table className="w-full text-xs text-left text-slate-600 whitespace-nowrap">
                 <TableHeader showSalesMetrics={true} />
                 <tbody>
-                     {data.map((row, index) => (
+                    {data.map((row, index) => (
                         <tr key={index} className="border-b hover:bg-slate-50">
                             <OperationalRowCells row={row} showSalesMetrics={true} />
                         </tr>
                     ))}
-                     {data.length === 0 && (
+                    {data.length === 0 && (
                         <tr>
                             <td colSpan={33} className="px-4 py-8 text-center text-slate-500">
                                 Nu există date disponibile pentru perioada selectată.
@@ -923,21 +1101,21 @@ const SalesTable = ({ data, dateRange }) => {
 };
 
 export default function App() {
-    const [selectedPeriod, setSelectedPeriod] = useState("week"); 
+    const [selectedPeriod, setSelectedPeriod] = useState("week");
     const [customStart, setCustomStart] = useState("");
     const [customEnd, setCustomEnd] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    
+
     // State per departament
     const [opsStats, setOpsStats] = useState([]);
     const [salesStats, setSalesStats] = useState([]);
-    const [mgmtStats, setMgmtStats] = useState([]); 
-    const [companyStats, setCompanyStats] = useState({ 
-        ctr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} }, 
-        livr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} } 
+    const [mgmtStats, setMgmtStats] = useState([]);
+    const [companyStats, setCompanyStats] = useState({
+        ctr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} },
+        livr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} }
     });
-    
+
     const [dateRangeStr, setDateRangeStr] = useState("");
     const [statusMessage, setStatusMessage] = useState("");
 
@@ -948,7 +1126,7 @@ export default function App() {
 
         if (selectedPeriod === 'week') {
             const day = start.getDay();
-            const diff = start.getDate() - day + (day === 0 ? -6 : 1) - 7; 
+            const diff = start.getDate() - day + (day === 0 ? -6 : 1) - 7;
             start.setDate(diff);
             start.setHours(0, 0, 0, 0);
             end.setDate(start.getDate() + 6);
@@ -957,7 +1135,7 @@ export default function App() {
             start.setMonth(start.getMonth() - 1);
             start.setDate(1);
             start.setHours(0, 0, 0, 0);
-            end.setDate(0); 
+            end.setDate(0);
             end.setHours(23, 59, 59, 999);
         } else if (selectedPeriod === 'year') {
             start.setFullYear(start.getFullYear() - 1);
@@ -974,8 +1152,8 @@ export default function App() {
             const eParts = customEnd.split('-').map(Number);
             const s = new Date(sParts[0], sParts[1] - 1, sParts[2]);
             const e = new Date(eParts[0], eParts[1] - 1, eParts[2]);
-            s.setHours(0,0,0,0);
-            e.setHours(23,59,59,999);
+            s.setHours(0, 0, 0, 0);
+            e.setHours(23, 59, 59, 999);
             return { start: s, end: e };
         }
         return { start, end };
@@ -983,12 +1161,13 @@ export default function App() {
 
     const processAllData = ({ comenziCtr, comenziLivr, solicitari, leadsContact, leadsQualified, furnizori, activities, start, end, dynamicCols }) => {
         setDateRangeStr(`${start.toLocaleDateString('ro-RO')} – ${end.toLocaleDateString('ro-RO')}`);
-        
+
         const generateStats = (employees) => employees.map(emp => ({
             id: emp.id,
             name: emp.name,
             mondayId: emp.mondayUserId,
-            
+            target: safeVal(emp.target),
+
             suppliersAdded: 0,
             ctr_principalCount: 0,
             ctr_principalProfitEur: 0,
@@ -1022,18 +1201,18 @@ export default function App() {
             websiteProfitSec: 0,
             burseCount: 0
         }));
-        
+
         const companyStatsLocal = {
-             ctr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} }, 
-             livr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} } 
+            ctr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} },
+            livr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} }
         };
-        
+
         // Helper to aggregate breakdowns
         const aggregateBreakdown = (targetStats, columnKey, rawVal) => {
             if (!rawVal) return;
             const val = String(rawVal).trim();
             if (val === "" || val.toLowerCase() === "null") return;
-            
+
             if (!targetStats.breakdowns[columnKey]) targetStats.breakdowns[columnKey] = {};
             if (!targetStats.breakdowns[columnKey][val]) targetStats.breakdowns[columnKey][val] = 0;
             targetStats.breakdowns[columnKey][val]++;
@@ -1048,7 +1227,7 @@ export default function App() {
             callback(salesStatsLocal);
             callback(mgmtStatsLocal); // Include Management in processing loop
         };
-        
+
         // Helper for orphan logic
         const RAFAEL_ID = "73046209";
 
@@ -1062,7 +1241,7 @@ export default function App() {
                 const valProfitTotal = extractNumericValue(getCol(COLS.COMENZI.PROFIT));
                 const valPrincipal = extractNumericValue(getCol(COLS.COMENZI.PROFIT_PRINCIPAL));
                 const valSecundar = extractNumericValue(getCol(COLS.COMENZI.PROFIT_SECUNDAR));
-                
+
                 const colProfitability = getCol(COLS.COMENZI.PROFITABILITATE);
                 let profitabilityVal = 0;
                 let hasProfitability = false;
@@ -1083,17 +1262,17 @@ export default function App() {
 
                 const clientTerm = extractNumericValue(getCol(COLS.COMENZI.TERMEN_PLATA_CLIENT));
                 const supplierTerm = extractNumericValue(getCol(COLS.COMENZI.TERMEN_PLATA_FURNIZOR));
-                
+
                 let isOverdue = false;
                 const scadentaClientText = getCol(COLS.COMENZI.DATA_SCADENTA_CLIENT)?.text;
                 const statusPlataClient = getCol(COLS.COMENZI.STATUS_PLATA_CLIENT)?.text?.toLowerCase() || "";
-                
+
                 if (scadentaClientText && !statusPlataClient.includes("incasata") && !statusPlataClient.includes("încasată")) {
                     const scadentaDate = new Date(scadentaClientText);
                     if (!isNaN(scadentaDate.getTime())) {
                         const today = new Date();
                         const diffTime = Math.abs(today - scadentaDate);
-                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                         if (scadentaDate < today && diffDays > 15) {
                             isOverdue = true;
                         }
@@ -1102,16 +1281,16 @@ export default function App() {
 
                 const colPrincipal = getCol(COLS.COMENZI.PRINCIPAL);
                 const colSecundar = getCol(COLS.COMENZI.SECUNDAR);
-                
+
                 let principalIds = getPersonIds(colPrincipal);
                 let secondaryIds = getPersonIds(colSecundar);
                 const hasSecondary = secondaryIds.length > 0;
-                
+
                 // ORPHAN PROFIT LOGIC for Rafael
                 if (!hasSecondary && valSecundar !== 0) {
                     secondaryIds.push(RAFAEL_ID);
                 }
-                
+
                 // --- COMPANY STATS (GLOBAL) CTR ---
                 const profitToAddP = isRon ? (valPrincipal / EXCHANGE_RATE) : valPrincipal;
                 const profitToAddS = isRon ? (valSecundar / EXCHANGE_RATE) : valSecundar;
@@ -1126,7 +1305,7 @@ export default function App() {
                 if (isBurse) {
                     companyStatsLocal.ctr.burseCount++;
                 }
-                
+
                 // Aggregation for breakdown
                 aggregateBreakdown(companyStatsLocal.ctr, "STATUS_CTR", getCol(COLS.COMENZI.STATUS_CTR)?.text);
                 aggregateBreakdown(companyStatsLocal.ctr, "DEP", getCol(COLS.COMENZI.DEP)?.text);
@@ -1156,7 +1335,7 @@ export default function App() {
                                 emp.websiteCount++;
                                 emp.websiteProfit += safeVal(profitToAddP);
                             }
-                            
+
                             if (hasProfitability) {
                                 emp.sumProfitability += safeVal(profitabilityVal);
                                 emp.countProfitability++;
@@ -1216,7 +1395,7 @@ export default function App() {
                 const colSecundar = getCol(COLS.COMENZI.SECUNDAR);
                 let principalIds = getPersonIds(colPrincipal);
                 let secondaryIds = getPersonIds(colSecundar);
-                
+
                 if (secondaryIds.length === 0 && valSecundar !== 0) {
                     secondaryIds.push(RAFAEL_ID);
                 }
@@ -1236,7 +1415,7 @@ export default function App() {
                     companyStatsLocal.livr.burseCount++;
                 }
 
-                 // Aggregation for breakdown
+                // Aggregation for breakdown
                 aggregateBreakdown(companyStatsLocal.livr, "STATUS_CTR", getCol(COLS.COMENZI.STATUS_CTR)?.text);
                 aggregateBreakdown(companyStatsLocal.livr, "DEP", getCol(COLS.COMENZI.DEP)?.text);
                 aggregateBreakdown(companyStatsLocal.livr, "STATUS_PLATA_CLIENT", getCol(COLS.COMENZI.STATUS_PLATA_CLIENT)?.text);
@@ -1271,7 +1450,7 @@ export default function App() {
         if (solicitari) {
             solicitari.items_page.items.forEach(item => {
                 const getCol = (id) => item.column_values.find(c => c.id === id);
-                
+
                 const sursaVal = getCol(COLS.SOLICITARI.SURSA)?.text?.trim().toLowerCase() || "";
                 if (sursaVal !== "website" && sursaVal !== "telefon / whatsapp fix") return;
 
@@ -1307,18 +1486,19 @@ export default function App() {
 
         if (activities) {
             activities.forEach(act => {
-                const userId = act.user?.id;
+                const userId = act.user?.id;   // ✅ ca în backup (fără fallback pe user_id)
                 if (!userId) return;
-                
+
                 applyToAllStats(statsList => {
                     const emp = statsList.find(e => String(e.mondayId) === String(userId));
                     if (emp) {
-                        if (act.type === 'email') emp.emailsCount++;
-                        if (act.type === 'activity') emp.callsCount++;
+                        if (act.type === "email") emp.emailsCount++;
+                        if (act.type === "activity") emp.callsCount++; // ✅ doar "activity"
                     }
                 });
             });
         }
+
 
         const processLeads = (boardData, type) => {
             if (!boardData) return;
@@ -1352,16 +1532,16 @@ export default function App() {
         setError(null);
         setOpsStats([]);
         setSalesStats([]);
-        setMgmtStats([]); 
-        setCompanyStats({ 
-            ctr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} }, 
-            livr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} } 
+        setMgmtStats([]);
+        setCompanyStats({
+            ctr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} },
+            livr: { count: 0, profit: 0, websiteCount: 0, websiteProfit: 0, burseCount: 0, breakdowns: {} }
         });
 
         try {
             const dateFrom = formatDateISO(start);
             const dateTo = formatDateISO(end);
-            
+
             const salesUserIds = new Set(DEPARTMENTS.sales.employees.map(e => String(e.mondayUserId)));
             const isOwnedBySales = (item, ownerColId) => {
                 const col = item.column_values.find(c => c.id === ownerColId);
@@ -1373,7 +1553,7 @@ export default function App() {
             const contacteCols = await fetchColumns(BOARD_ID_CONTACTE);
             const furnDateCol = furnizoriCols.find(c => c.type === 'date' || c.title.toLowerCase().includes('data'))?.id || "date4";
             const furnPersonCol = furnizoriCols.find(c => c.type === 'people' || c.title.toLowerCase().includes('owner') || c.title.toLowerCase().includes('persoana'))?.id || "person";
-            const contactOwnerCol = COLS.CONTACTE.OWNER; 
+            const contactOwnerCol = COLS.CONTACTE.OWNER;
 
             // Find Dynamic Columns for Comenzi
             const comenziCols = await fetchColumns(BOARD_ID_COMENZI);
@@ -1389,7 +1569,7 @@ export default function App() {
             COLS.COMENZI.MOD_TRANSPORT = findColId("Mod Transport", "mod_transport");
             COLS.COMENZI.TIP_MARFA = findColId("Tip Marfa", "tip_marfa");
             COLS.COMENZI.OCUPARE = findColId("Ocupare", "ocupare");
-            
+
             // New dynamic columns
             COLS.COMENZI.CLIENT_PE = findColId("Client pe", COLS.COMENZI.CLIENT_PE);
             COLS.COMENZI.FURNIZ_PE = findColId("Furnizor pe", COLS.COMENZI.FURNIZ_PE);
@@ -1400,34 +1580,39 @@ export default function App() {
             const furnizori = await fetchAllItems(BOARD_ID_FURNIZORI, [furnDateCol, furnPersonCol], `[{ column_id: "${furnDateCol}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`);
             const leadsContact = await fetchAllItems(BOARD_ID_LEADS, Object.values(COLS.LEADS), `[{ column_id: "${COLS.LEADS.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }, { column_id: "${COLS.LEADS.STATUS}", operator: any_of, compare_value: [14] }]`);
             const leadsQualified = await fetchAllItems(BOARD_ID_LEADS, Object.values(COLS.LEADS), `[{ column_id: "${COLS.LEADS.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }, { column_id: "${COLS.LEADS.STATUS}", operator: any_of, compare_value: [103] }]`);
-            
+
             setStatusMessage("Se scanează itemii pentru activități (Filtrare Server-Side)...");
 
-            const salesIds = DEPARTMENTS.sales.employees.map(e => e.mondayUserId);
-
-            // rules monday: două reguli (owner any_of + data between)
+            // IMPORTANT: Pentru activități, filtrăm inițial DOAR după DATĂ,
+            // ca să identificăm item-urile care trebuie verificate în timeline.
+            // Atribuirea către angajat se face ulterior după act.user_id.
             const leadsRules = `[
-                    { column_id: "${COLS.LEADS.OWNER}", operator: any_of, compare_value: [${salesIds.join(",")}] },
-                    { column_id: "${COLS.LEADS.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }
-                ]`;
+    { column_id: "${COLS.LEADS.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }
+]`;
 
             const contactsRules = `[
-                    { column_id: "${contactOwnerCol}", operator: any_of, compare_value: [${salesIds.join(",")}] },
-                    { column_id: "${COLS.CONTACTE.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }
-                ]`;
+    { column_id: "${COLS.CONTACTE.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }
+]`;
 
             const rawLeads = await fetchItemsDirectory(BOARD_ID_LEADS, COLS.LEADS.OWNER, leadsRules, { maxPages: 30 });
             const rawContacts = await fetchItemsDirectory(BOARD_ID_CONTACTE, contactOwnerCol, contactsRules, { maxPages: 30 });
 
-            const allActivityItemIds = [...rawLeads.items_page.items, ...rawContacts.items_page.items].map(i => i.id);
+            // ✅ ca în App_backup.jsx: filtrare client-side după Owner (Sales)
+            const relevantLeads = rawLeads.items_page.items.filter(i => isOwnedBySales(i, COLS.LEADS.OWNER));
+            const relevantContacts = rawContacts.items_page.items.filter(i => isOwnedBySales(i, contactOwnerCol));
 
-            
+            // ✅ doar itemii relevanți intră la timeline
+            const allActivityItemIds = [...relevantLeads, ...relevantContacts]
+                .map(i => i?.id)
+                .filter(Boolean);
+
+
             let activities = [];
             if (allActivityItemIds.length > 0) {
                 setStatusMessage(`Se descarcă activități pentru ${allActivityItemIds.length} itemi...`);
                 activities = await fetchActivitiesForItems(allActivityItemIds, start, end);
             }
-            
+
             setStatusMessage("Se finalizează calculele...");
             processAllData({ comenziCtr, comenziLivr, solicitari, leadsContact, leadsQualified, furnizori, activities, start, end, dynamicCols: { furnDateCol, furnPersonCol } });
 
@@ -1492,7 +1677,7 @@ export default function App() {
             });
 
             // =========================================================
-            // addDepartmentTable (exact ca la tine)
+            // addDepartmentTable
             // =========================================================
             const addDepartmentTable = (title, data, isSales) => {
                 const titleRow = sheet.getRow(currentRow);
@@ -1581,9 +1766,10 @@ export default function App() {
                 currentRow += 2;
 
                 // 2) BODY
-                const target = 0;
 
                 data.forEach((item) => {
+
+                    const target = safeVal(item.target);
                     const row = sheet.getRow(currentRow);
                     let c = 1;
 
@@ -1757,6 +1943,312 @@ export default function App() {
 
                     currentRow++;
                 });
+
+                // =====================
+                // FOOTER: TOTAL + MEDIA
+                // =====================
+                const totals = data.reduce((acc, item) => {
+                    acc.contactat += safeVal(item.contactat);
+                    acc.calificat += safeVal(item.calificat);
+                    acc.emailsCount += safeVal(item.emailsCount);
+                    acc.callsCount += safeVal(item.callsCount);
+
+                    acc.suppliersAdded += safeVal(item.suppliersAdded);
+
+                    acc.ctr_principalCount += safeVal(item.ctr_principalCount);
+                    acc.ctr_principalProfitEur += safeVal(item.ctr_principalProfitEur);
+                    acc.ctr_secondaryCount += safeVal(item.ctr_secondaryCount);
+                    acc.ctr_secondaryProfitEur += safeVal(item.ctr_secondaryProfitEur);
+
+                    acc.livr_principalCount += safeVal(item.livr_principalCount);
+                    acc.livr_principalProfitEur += safeVal(item.livr_principalProfitEur);
+                    acc.livr_secondaryCount += safeVal(item.livr_secondaryCount);
+                    acc.livr_secondaryProfitEur += safeVal(item.livr_secondaryProfitEur);
+
+                    acc.websiteCount += safeVal(item.websiteCount);
+                    acc.websiteProfit += safeVal(item.websiteProfit);
+                    acc.websiteCountSec += safeVal(item.websiteCountSec);
+                    acc.websiteProfitSec += safeVal(item.websiteProfitSec);
+                    acc.burseCount += safeVal(item.burseCount);
+
+                    acc.solicitariCount += safeVal(item.solicitariCount);
+
+                    acc.sumClientTerms += safeVal(item.sumClientTerms);
+                    acc.countClientTerms += safeVal(item.countClientTerms);
+                    acc.sumSupplierTerms += safeVal(item.sumSupplierTerms);
+                    acc.countSupplierTerms += safeVal(item.countSupplierTerms);
+
+                    acc.overdueInvoicesCount += safeVal(item.overdueInvoicesCount);
+
+                    acc.sumProfitability += safeVal(item.sumProfitability);
+                    acc.countProfitability += safeVal(item.countProfitability);
+
+                    acc.supplierTermsUnder30 += safeVal(item.supplierTermsUnder30);
+                    acc.supplierTermsOver30 += safeVal(item.supplierTermsOver30);
+
+                    acc.targetTotal += safeVal(item.target);
+
+                    return acc;
+                }, {
+                    contactat: 0, calificat: 0, emailsCount: 0, callsCount: 0,
+                    suppliersAdded: 0,
+                    ctr_principalCount: 0, ctr_principalProfitEur: 0, ctr_secondaryCount: 0, ctr_secondaryProfitEur: 0,
+                    livr_principalCount: 0, livr_principalProfitEur: 0, livr_secondaryCount: 0, livr_secondaryProfitEur: 0,
+                    websiteCount: 0, websiteProfit: 0,
+                    websiteCountSec: 0, websiteProfitSec: 0,
+                    burseCount: 0,
+                    solicitariCount: 0,
+                    sumClientTerms: 0, countClientTerms: 0,
+                    sumSupplierTerms: 0, countSupplierTerms: 0,
+                    overdueInvoicesCount: 0,
+                    sumProfitability: 0, countProfitability: 0,
+                    supplierTermsUnder30: 0, supplierTermsOver30: 0,
+                    targetTotal: 0
+                });
+
+                const count = data.length || 1;
+
+                const totalCtrCount = totals.ctr_principalCount + totals.ctr_secondaryCount;
+                const totalCtrProfit = totals.ctr_principalProfitEur + totals.ctr_secondaryProfitEur;
+
+                const totalLivrCount = totals.livr_principalCount + totals.livr_secondaryCount;
+                const totalLivrProfit = totals.livr_principalProfitEur + totals.livr_secondaryProfitEur;
+
+                const bonusTotal = totalCtrProfit - totals.targetTotal;
+
+                const avgProfitability = totals.countProfitability > 0
+                    ? (totals.sumProfitability / totals.countProfitability)
+                    : 0;
+
+                const avgClientTerm = totals.countClientTerms > 0
+                    ? (totals.sumClientTerms / totals.countClientTerms)
+                    : 0;
+
+                const avgSupplierTerm = totals.countSupplierTerms > 0
+                    ? (totals.sumSupplierTerms / totals.countSupplierTerms)
+                    : 0;
+
+                const rateConvWeb = totals.solicitariCount > 0
+                    ? (totals.websiteCount / totals.solicitariCount) * 100
+                    : 0;
+
+                const totalLeads = totals.calificat + totals.contactat;
+                const rateConvClients = totalLeads > 0
+                    ? (totals.calificat / totalLeads) * 100
+                    : 0;
+
+                const avg = (v) => v / count;
+
+                const writeFooterRow = (label, isAvg = false) => {
+                    const r = sheet.getRow(currentRow);
+                    let c = 1;
+
+                    // 1) ANGAJAT label
+                    const labelCell = r.getCell(c++);
+                    labelCell.value = label;
+                    labelCell.border = thinBorder;
+                    labelCell.font = { bold: true };
+                    labelCell.fill = fillStyle("E5E7EB");
+
+                    // 2) FURNIZORI
+                    const furnCell = r.getCell(c++);
+                    furnCell.value = isAvg ? avg(totals.suppliersAdded) : totals.suppliersAdded;
+                    furnCell.border = thinBorder;
+                    furnCell.alignment = alignCenter;
+                    if (isAvg) furnCell.numFmt = "0.0";
+                    furnCell.fill = fillStyle("F3F4F6");
+
+                    // 3) CTR 6
+                    const ctrVals = isAvg
+                        ? [
+                            avg(totals.ctr_principalCount),
+                            avg(totals.ctr_principalProfitEur),
+                            avg(totals.ctr_secondaryCount),
+                            avg(totals.ctr_secondaryProfitEur),
+                            avg(totalCtrCount),
+                            avg(totalCtrProfit),
+                        ]
+                        : [
+                            totals.ctr_principalCount,
+                            totals.ctr_principalProfitEur,
+                            totals.ctr_secondaryCount,
+                            totals.ctr_secondaryProfitEur,
+                            totalCtrCount,
+                            totalCtrProfit,
+                        ];
+
+                    ctrVals.forEach((v, i) => {
+                        const cell = r.getCell(c++);
+                        cell.value = v;
+                        cell.border = thinBorder;
+                        cell.alignment = alignCenter;
+                        cell.fill = fillStyle("E3F2FD");
+                        if (i === 1 || i === 3 || i === 5) cell.numFmt = "#,##0.00";
+                        if (!isAvg && i >= 4) cell.font = fontBold;
+                        if (isAvg && (i === 0 || i === 2 || i === 4)) cell.numFmt = "0.0";
+                    });
+
+                    // 4) LIVR 6
+                    const livrVals = isAvg
+                        ? [
+                            avg(totals.livr_principalCount),
+                            avg(totals.livr_principalProfitEur),
+                            avg(totals.livr_secondaryCount),
+                            avg(totals.livr_secondaryProfitEur),
+                            avg(totalLivrCount),
+                            avg(totalLivrProfit),
+                        ]
+                        : [
+                            totals.livr_principalCount,
+                            totals.livr_principalProfitEur,
+                            totals.livr_secondaryCount,
+                            totals.livr_secondaryProfitEur,
+                            totalLivrCount,
+                            totalLivrProfit,
+                        ];
+
+                    livrVals.forEach((v, i) => {
+                        const cell = r.getCell(c++);
+                        cell.value = v;
+                        cell.border = thinBorder;
+                        cell.alignment = alignCenter;
+                        cell.fill = fillStyle("E8F5E9");
+                        if (i === 1 || i === 3 || i === 5) cell.numFmt = "#,##0.00";
+                        if (!isAvg && i >= 4) cell.font = fontBold;
+                        if (isAvg && (i === 0 || i === 2 || i === 4)) cell.numFmt = "0.0";
+                    });
+
+                    // 5) TARGET + BONUS
+                    const targetVal = isAvg ? (totals.targetTotal / count) : totals.targetTotal;
+                    let cell = r.getCell(c++);
+                    cell.value = targetVal;
+                    cell.border = thinBorder;
+                    cell.numFmt = "#,##0.00";
+                    cell.fill = fillStyle("E3F2FD");
+
+                    const bonusVal = isAvg ? (bonusTotal / count) : bonusTotal;
+                    cell = r.getCell(c++);
+                    cell.value = bonusVal;
+                    cell.border = thinBorder;
+                    cell.numFmt = "#,##0.00";
+                    cell.fill = fillStyle("E3F2FD");
+                    cell.font = { color: { argb: "FF008000" }, bold: true };
+
+                    // 6) OTHERS 13 (în aceeași ordine ca exportul tău)
+                    // PROFITABILITATE %
+                    cell = r.getCell(c++);
+                    cell.value = `${formatNumber(avgProfitability)}%`; // la TOTAL și MEDIA ai aceeași medie ponderată din TableFooter
+                    cell.border = thinBorder;
+                    cell.fill = fillStyle("E3F2FD");
+                    cell.font = { color: { argb: "FF1E40AF" }, bold: true };
+
+                    // CURSE WEB PR
+                    cell = r.getCell(c++);
+                    cell.value = isAvg ? avg(totals.websiteCount) : totals.websiteCount;
+                    cell.border = thinBorder;
+                    if (isAvg) cell.numFmt = "0.0";
+
+                    // PROFIT WEB PR
+                    cell = r.getCell(c++);
+                    cell.value = isAvg ? avg(totals.websiteProfit) : totals.websiteProfit;
+                    cell.border = thinBorder;
+                    cell.numFmt = "#,##0.00";
+
+                    // CURSE WEB SEC
+                    cell = r.getCell(c++);
+                    cell.value = isAvg ? avg(totals.websiteCountSec) : totals.websiteCountSec;
+                    cell.border = thinBorder;
+                    cell.fill = fillStyle("F3E8FF");
+                    if (isAvg) cell.numFmt = "0.0";
+
+                    // PROFIT WEB SEC
+                    cell = r.getCell(c++);
+                    cell.value = isAvg ? avg(totals.websiteProfitSec) : totals.websiteProfitSec;
+                    cell.border = thinBorder;
+                    cell.numFmt = "#,##0.00";
+                    cell.fill = fillStyle("F3E8FF");
+
+                    // CURSE BURSE
+                    cell = r.getCell(c++);
+                    cell.value = isAvg ? avg(totals.burseCount) : totals.burseCount;
+                    cell.border = thinBorder;
+                    cell.fill = fillStyle("FFF7ED");
+                    if (isAvg) cell.numFmt = "0.0";
+
+                    // SOLICITĂRI WEB
+                    cell = r.getCell(c++);
+                    cell.value = isAvg ? avg(totals.solicitariCount) : totals.solicitariCount;
+                    cell.border = thinBorder;
+                    cell.fill = fillStyle("F3E8FF");
+                    if (isAvg) cell.numFmt = "0.0";
+
+                    // CONV WEB %
+                    cell = r.getCell(c++);
+                    cell.value = isAvg ? "-" : `${formatNumber(rateConvWeb)}%`;
+                    cell.border = thinBorder;
+
+                    // TERMEN CLIENT
+                    cell = r.getCell(c++);
+                    cell.value = isAvg ? "-" : formatNumber(avgClientTerm);
+                    cell.border = thinBorder;
+
+                    // TERMEN FURNIZOR
+                    cell = r.getCell(c++);
+                    cell.value = isAvg ? "-" : formatNumber(avgSupplierTerm);
+                    cell.border = thinBorder;
+
+                    // INTARZIERI >15
+                    cell = r.getCell(c++);
+                    cell.value = isAvg ? avg(totals.overdueInvoicesCount) : totals.overdueInvoicesCount;
+                    cell.border = thinBorder;
+                    cell.font = { color: { argb: "FFFF0000" }, bold: true };
+                    if (isAvg) cell.numFmt = "0.0";
+
+                    // FURN <30
+                    cell = r.getCell(c++);
+                    cell.value = isAvg ? avg(totals.supplierTermsUnder30) : totals.supplierTermsUnder30;
+                    cell.border = thinBorder;
+                    cell.fill = fillStyle("FFF7ED");
+                    if (isAvg) cell.numFmt = "0.0";
+
+                    // FURN >=30
+                    cell = r.getCell(c++);
+                    cell.value = isAvg ? avg(totals.supplierTermsOver30) : totals.supplierTermsOver30;
+                    cell.border = thinBorder;
+                    cell.fill = fillStyle("FFF7ED");
+                    if (isAvg) cell.numFmt = "0.0";
+
+                    // 7) SALES METRICS (la final, cum e exportul tău)
+                    if (isSales) {
+                        const contactedVal = isAvg ? avg(totals.contactat) : totals.contactat;
+                        const qualifiedVal = isAvg ? avg(totals.calificat) : totals.calificat;
+
+                        const m = [
+                            contactedVal,
+                            qualifiedVal,
+                            isAvg ? "-" : `${formatNumber(rateConvClients)}%`,
+                            isAvg ? avg(totals.emailsCount) : totals.emailsCount,
+                            isAvg ? avg(totals.callsCount) : totals.callsCount
+                        ];
+
+                        m.forEach((v, idx) => {
+                            const cc = r.getCell(c++);
+                            cc.value = v;
+                            cc.border = thinBorder;
+                            cc.alignment = alignCenter;
+                            // aceeași idee de culoare ca header-ul
+                            cc.fill = fillStyle(idx < 3 ? "FEF9C3" : "E0E7FF");
+                            if (isAvg && typeof v === "number") cc.numFmt = "0.0";
+                        });
+                    }
+
+                    currentRow++;
+                };
+
+                // după body:
+                writeFooterRow("TOTAL", false);
+                writeFooterRow("MEDIA", true);
+
 
                 currentRow++; // spațiu între tabele
             };
@@ -1939,7 +2431,7 @@ export default function App() {
                     </div>
                 </div>
 
-                {error && <div className="p-4 bg-red-50 text-red-800 rounded-lg mb-6 flex gap-2"><AlertCircle className="w-5 h-5"/> {error}</div>}
+                {error && <div className="p-4 bg-red-50 text-red-800 rounded-lg mb-6 flex gap-2"><AlertCircle className="w-5 h-5" /> {error}</div>}
 
                 <div className="space-y-12">
                     {mgmtStats.length > 0 && <div className="animate-fade-in"><ManagementTable data={mgmtStats} dateRange={dateRangeStr} /></div>}
