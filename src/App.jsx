@@ -70,7 +70,7 @@ const COLS = {
         SECUNDAR: "multiple_person_mktbbfzk"
     },
     LEADS: {
-        DATA: "date_mkrcze31", 
+        DATA: "date__1", 
         STATUS: "lead_status", 
         OWNER: "lead_owner"
     },
