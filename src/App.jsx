@@ -791,44 +791,53 @@ export default function App() {
     const [statusMessage, setStatusMessage] = useState("");
 
     const getDateRange = () => {
-        const now = new Date();
-        const start = new Date(now);
-        const end = new Date(now);
+    const now = new Date();
 
-        if (selectedPeriod === 'week') {
-            const day = start.getDay();
-            const diff = start.getDate() - day + (day === 0 ? -6 : 1) - 7; 
-            start.setDate(diff);
-            start.setHours(0, 0, 0, 0);
-            end.setDate(start.getDate() + 6);
-            end.setHours(23, 59, 59, 999);
-        } else if (selectedPeriod === 'month') {
-            start.setMonth(start.getMonth() - 1);
-            start.setDate(1);
-            start.setHours(0, 0, 0, 0);
-            end.setDate(0); 
-            end.setHours(23, 59, 59, 999);
-        } else if (selectedPeriod === 'year') {
-            start.setFullYear(start.getFullYear() - 1);
-            start.setMonth(0);
-            start.setDate(1);
-            start.setHours(0, 0, 0, 0);
-            end.setFullYear(end.getFullYear() - 1);
-            end.setMonth(11);
-            end.setDate(31);
-            end.setHours(23, 59, 59, 999);
-        } else if (selectedPeriod === 'custom') {
-            if (!customStart || !customEnd) return null;
-            const sParts = customStart.split('-').map(Number);
-            const eParts = customEnd.split('-').map(Number);
-            const s = new Date(sParts[0], sParts[1] - 1, sParts[2]);
-            const e = new Date(eParts[0], eParts[1] - 1, eParts[2]);
-            s.setHours(0,0,0,0);
-            e.setHours(23,59,59,999);
-            return { start: s, end: e };
-        }
+    let start;
+    let end;
+
+    if (selectedPeriod === 'week') {
+        start = new Date(now);
+        const day = start.getDay();
+        const diff = start.getDate() - day + (day === 0 ? -6 : 1) - 7;
+
+        start.setDate(diff);
+        start.setHours(0, 0, 0, 0);
+
+        end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        end.setHours(23, 59, 59, 999);
+    }
+
+    else if (selectedPeriod === 'month') {
+        const year = now.getFullYear();
+        const month = now.getMonth();
+
+        start = new Date(year, month - 1, 1);
+        end = new Date(year, month, 0, 23, 59, 59, 999);
+    }
+
+    else if (selectedPeriod === 'year') {
+        const prevYear = now.getFullYear() - 1;
+
+        start = new Date(prevYear, 0, 1);
+        end = new Date(prevYear, 11, 31, 23, 59, 59, 999);
+    }
+
+    else if (selectedPeriod === 'custom') {
+        if (!customStart || !customEnd) return null;
+
+        const [sy, sm, sd] = customStart.split('-').map(Number);
+        const [ey, em, ed] = customEnd.split('-').map(Number);
+
+        start = new Date(sy, sm - 1, sd);
+        end = new Date(ey, em - 1, ed, 23, 59, 59, 999);
+
         return { start, end };
-    };
+    }
+
+    return { start, end };
+};
 
     const handleGenerate = () => {
         const range = getDateRange();
