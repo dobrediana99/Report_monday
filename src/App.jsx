@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 // --- CONFIGURARE ---
-const API_KEY = "eyJhbGciOiJIUzI1NiJ9.eyJ0aWQiOjU3NDczMTUzNSwiYWFpIjoxMSwidWlkIjo4NzM3MDM4NSwiaWFkIjoiMjAyNS0xMC0xNlQwOTo1MTo0Ny4wMDBaIiwicGVyIjoibWU6d3JpdGUiLCJhY3RpZCI6MjgzNzcyNDAsInJnbiI6ImV1YzEifQ.bks6adI9YblX7erZYPv234teKA9-sniZGNZTqLW2XtA";
+const API_KEY = "eyJhbGciOiJIUzI1NiJ9.eyJ0aWQiOjY0ODY5MTE3NiwiYWFpIjoxMSwidWlkIjoxMDI1NjkxMzYsImlhZCI6IjIwMjYtMDQtMjJUMDc6NDY6MjguMDAwWiIsInBlciI6Im1lOndyaXRlIiwiYWN0aWQiOjI4Mzc3MjQwLCJyZ24iOiJldWMxIn0.Qeau1CH7QUl6OuHAvl7cEVqs78trb-f3MCrg53xiqxw";
 const EXCHANGE_RATE = 5.1; // Curs actualizat 2025
 
 // IDs Board-uri
