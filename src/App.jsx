@@ -127,33 +127,29 @@ const DEPARTMENTS = {
     management: {
         name: "Management",
         employees: [
-            { id: 301, name: "Alin Lita", mondayUserId: 73962695, target: 3960 },
-            { id: 302, name: "Bogdan Serafim", mondayUserId: 73962698, target: 3780 },
+            { id: 301, name: "Alin Lita", mondayUserId: 73962695, target: 6494 },
+            { id: 302, name: "Bogdan Serafim", mondayUserId: 73962698, target: 6494 },
             { id: 303, name: "Rafael Onișoară", mondayUserId: 73046209, target: 0 }
         ]
     },
     sales: {
         name: "Vânzări",
         employees: [
-            { id: 201, name: "Alexandru Paraschiv", mondayUserId: 74108550, target: 3300 },
-            { id: 202, name: "Denisa Ionescu", mondayUserId: 74108553, target: 2442 },
-            { id: 203, name: "Andrei Pauna", mondayUserId: 73046350, target: 3400 },
-            { id: 204, name: "Nedelcu Alexandru", mondayUserId: 77987246, target: 3630 },
-            { id: 205, name: "Christiana Sora", mondayUserId: 90770132, target: 2310 },
-            { id: 208, name: "Eduard Grigore", mondayUserId: 96568397, target: 2100 },
-            { id: 209, name: "George Rafte", mondayUserId: 98357010, target: 2800 }
+            { id: 202, name: "Denisa Ionescu", mondayUserId: 74108553, target: 3700 },
+            { id: 203, name: "Andrei Pauna", mondayUserId: 73046350, target: 5000 },
+            { id: 204, name: "Nedelcu Alexandru", mondayUserId: 77987246, target: 5500 }
         ]
     },
     operational: {
         name: "Operațiuni",
         employees: [
-            { id: 103, name: "David Popescu", mondayUserId: 74695692, target: 3485 },
-            { id: 104, name: "Roberto Coica", mondayUserId: 74668675, target: 3240 },
-            { id: 105, name: "Dumitru Ionut", mondayUserId: 74668676, target: 3240 },
+            { id: 103, name: "David Popescu", mondayUserId: 74695692, target: 5000 },
+            { id: 104, name: "Roberto Coica", mondayUserId: 74668675, target: 4500 },
+            { id: 105, name: "Dumitru Ionut", mondayUserId: 74668676, target: 5280 },
             { id: 106, name: "Robert Florea", mondayUserId: 74668678, target: 4590 },
-            { id: 107, name: "Alexandra Ghiurca", mondayUserId: 96280239, target: 3040 },
-            { id: 108, name: "David Mitrica", mondayUserId: 89227837, target: 1920 },
-            { id: 109, name: "Mocanu George", mondayUserId: 96568400, target: 3040 }
+            { id: 107, name: "Alexandra Ghiurca", mondayUserId: 96280239, target: 4240 },
+            { id: 108, name: "David Mitrica", mondayUserId: 89227837, target: 3180 },
+            { id: 109, name: "Dan Zinca", mondayUserId: 102891982, target: 3710 }
         ]
     }
 };
