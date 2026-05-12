@@ -57,6 +57,26 @@ function sanitizeMondayColumnIds(colIdsArray) {
     return out;
 }
 
+function escapeGraphQLString(value) {
+    return String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function logMondayGraphQLErrors(json, contextLabel) {
+    const errs = json?.errors;
+    if (!errs?.length) return;
+    console.error("[Monday API] full errors", errs);
+    errs.forEach((err, index) => {
+        console.error(`Monday error ${index + 1}`, {
+            message: err.message,
+            path: err.path,
+            extensions: err.extensions,
+        });
+    });
+    if (contextLabel) {
+        console.error("[Monday API] error context:", contextLabel);
+    }
+}
+
 const EXCHANGE_RATE = 5.1; // Curs actualizat 2025
 
 // IDs Board-uri
@@ -65,6 +85,9 @@ const BOARD_ID_LEADS = 1853156722;
 const BOARD_ID_CONTACTE = 1853156713;
 const BOARD_ID_FURNIZORI = 1907628670; 
 const BOARD_ID_SOLICITARI = 1905911565;
+
+/** Paginare Solicitări: limită de siguranță (items_page + next_items_page). */
+const MAX_SOLICITARI_PAGES = 50;
 
 // Link Google Drive
 const DRIVE_FOLDER_LINK = "https://drive.google.com/drive/folders/1I_sUSjcWBXZr70ns58a8VzK5d0pEM1C6?ths=true";
@@ -816,7 +839,8 @@ export default function App() {
     const [customEnd, setCustomEnd] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    
+    const [warnings, setWarnings] = useState([]);
+
     // State per departament
     const [opsStats, setOpsStats] = useState([]);
     const [salesStats, setSalesStats] = useState([]);
@@ -1643,33 +1667,20 @@ export default function App() {
 
         const colsString = colIds.map((c) => `"${c}"`).join(", ");
 
-        const logMondayItemsPageFailure = (reason, json, query) => {
-            console.error("[Monday API] items_page —", reason, {
+        const logMondayItemsPageFailure = (reason, json, query, usingNextItemsPage) => {
+            console.error("[Monday API] fetchAllItems failed", {
                 label,
                 boardId,
                 columns: colIds,
                 rulesString,
+                usingNextItemsPage,
                 query,
                 response: json,
+                reason,
             });
         };
 
-        const allItems = [];
-        let cursor = null;
-        let hasMore = true;
-
-        while (hasMore) {
-            const args = cursor
-                ? `limit: ${MONDAY_ITEMS_PAGE_LIMIT}, cursor: "${String(cursor).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
-                : `limit: ${MONDAY_ITEMS_PAGE_LIMIT}${
-                      rulesString ? `, query_params: { rules: ${rulesString} }` : ""
-                  }`;
-
-            const query = `query {
-                boards (ids: [${boardId}]) {
-                    items_page (${args}) {
-                        cursor
-                        items {
+        const itemsFields = `
                             id
                             name
                             column_values(ids: [${colsString}]) {
@@ -1678,11 +1689,31 @@ export default function App() {
                                 value
                                 type
                                 ... on FormulaValue { display_value }
+                            }`;
+
+        const allItems = [];
+        let cursor = null;
+
+        while (true) {
+            const query = cursor
+                ? `query {
+                    next_items_page(limit: ${MONDAY_ITEMS_PAGE_LIMIT}, cursor: "${escapeGraphQLString(cursor)}") {
+                        cursor
+                        items {${itemsFields}
+                        }
+                    }
+                }`
+                : `query {
+                    boards (ids: [${boardId}]) {
+                        items_page(limit: ${MONDAY_ITEMS_PAGE_LIMIT}${
+                            rulesString ? `, query_params: { rules: ${rulesString} }` : ""
+                        }) {
+                            cursor
+                            items {${itemsFields}
                             }
                         }
                     }
-                }
-            }`;
+                }`;
 
             let attempts = 0;
             let success = false;
@@ -1718,55 +1749,168 @@ export default function App() {
             }
 
             if (json.errors && json.errors.length) {
-                logMondayItemsPageFailure("GraphQL errors", json, query);
-                const msg = json.errors[0]?.message || "Monday API error";
+                logMondayItemsPageFailure(
+                    "GraphQL errors",
+                    json,
+                    query,
+                    Boolean(cursor)
+                );
+                const msg = json.errors.map((e) => e.message).join(" | ") || "Monday API error";
                 throw new Error(`${label}: ${msg}`);
             }
 
-            const itemsPage = json.data?.boards?.[0]?.items_page;
-            if (!itemsPage) {
-                logMondayItemsPageFailure("lipsește data.boards[0].items_page", json, query);
-                throw new Error(
-                    `${label}: răspuns incomplet de la Monday (lipsește items_page). Detalii în consolă.`
+            const page = cursor
+                ? json.data?.next_items_page
+                : json.data?.boards?.[0]?.items_page;
+
+            if (!page) {
+                logMondayItemsPageFailure(
+                    cursor ? "lipsește next_items_page" : "lipsește boards[0].items_page",
+                    json,
+                    query,
+                    Boolean(cursor)
                 );
+                throw new Error(`${label}: răspuns incomplet de la Monday`);
             }
 
-            const pageItems = Array.isArray(itemsPage.items) ? itemsPage.items : [];
-            allItems.push(...pageItems);
+            allItems.push(...(page.items || []));
 
-            const nextCursor = itemsPage.cursor;
-            if (!nextCursor) {
-                hasMore = false;
-            } else {
-                cursor = nextCursor;
+            if (!page.cursor) {
+                break;
             }
+            cursor = page.cursor;
         }
 
         return { items_page: { items: allItems } };
     };
 
-    /** Solicitări: doar id-uri din items_page (fără column_values — board cu multe coloane → 500 dacă ceri toate). */
+    /**
+     * Solicitări: prima pagină filtrată pe server după `deal_creation_date` (fără next_items_page).
+     * Dacă există `cursor`, există mai mult de 500 rezultate filtrate — paginarea ulterioară e evitată (500 la Monday).
+     */
+    const fetchSolicitariFilteredFirstPage = async (dateFrom, dateTo) => {
+        const authKey = getMondayApiKey();
+
+        const columnIds = sanitizeMondayColumnIds([
+            COLS.SOLICITARI.DATA,
+            COLS.SOLICITARI.SURSA,
+            COLS.SOLICITARI.PRINCIPAL,
+            COLS.SOLICITARI.SECUNDAR,
+        ]);
+
+        if (columnIds.length === 0) {
+            throw new Error(
+                "Solicitări filtered first page: listă goală de column ids după curățare."
+            );
+        }
+
+        const colsString = columnIds.map((id) => `"${id}"`).join(", ");
+        const df = escapeGraphQLString(dateFrom);
+        const dt = escapeGraphQLString(dateTo);
+        const dataCol = escapeGraphQLString(COLS.SOLICITARI.DATA);
+
+        const query = `query {
+            boards(ids: [${BOARD_ID_SOLICITARI}]) {
+                items_page(
+                    limit: 500,
+                    query_params: {
+                        rules: [
+                            {
+                                column_id: "${dataCol}",
+                                operator: between,
+                                compare_value: ["${df}", "${dt}"]
+                            }
+                        ]
+                    }
+                ) {
+                    cursor
+                    items {
+                        id
+                        name
+                        column_values(ids: [${colsString}]) {
+                            id
+                            text
+                            value
+                        }
+                    }
+                }
+            }
+        }`;
+
+        const response = await fetch("https://api.monday.com/v2", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: authKey,
+            },
+            body: JSON.stringify({ query }),
+        });
+
+        const json = await response.json().catch(() => ({}));
+
+        if (!response.ok || json.errors?.length) {
+            logMondayGraphQLErrors(json, "Solicitări filtered first page");
+            console.warn("[Monday API] Solicitări filtered first page failed", {
+                query,
+                response: json,
+            });
+
+            throw new Error(
+                json.errors?.map((e) => e.message).filter(Boolean).join(" | ") ||
+                    `HTTP ${response.status}`
+            );
+        }
+
+        const page = json.data?.boards?.[0]?.items_page;
+        const items = page?.items || [];
+
+        console.log("Solicitări filtered first page items:", items.length);
+
+        if (page?.cursor) {
+            setWarnings((prev) => [
+                ...prev,
+                "Atenție: boardul Solicitări are mai mult de 500 rezultate în intervalul selectat. Raportul include primele 500 rezultate, deoarece paginarea Monday dă Internal Server Error.",
+            ]);
+        }
+
+        return {
+            items_page: {
+                items,
+            },
+        };
+    };
+
+    /**
+     * Solicitări (fallback): id-uri — `boards.items_page` apoi `next_items_page`.
+     * Return: `number[]` dacă paginarea s-a terminat normal; `{ ids, partial, reason }` dacă s-a oprit parțial.
+     */
     const fetchSolicitariItemIds = async () => {
         const authKey = getMondayApiKey();
         const allIds = [];
         let cursor = null;
-        let hasMore = true;
+        let pageNumber = 0;
+        let partialMeta = null;
 
-        while (hasMore) {
-            const args = cursor
-                ? `limit: 25, cursor: "${String(cursor).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
-                : `limit: 25`;
-
-            const query = `query {
-                boards(ids: [${BOARD_ID_SOLICITARI}]) {
-                    items_page(${args}) {
+        while (true) {
+            const query = cursor
+                ? `query {
+                    next_items_page(limit: 10, cursor: "${escapeGraphQLString(cursor)}") {
                         cursor
                         items {
                             id
                         }
                     }
-                }
-            }`;
+                }`
+                : `query {
+                    boards(ids: [${BOARD_ID_SOLICITARI}]) {
+                        items_page(limit: 10) {
+                            cursor
+                            items {
+                                id
+                            }
+                        }
+                    }
+                }`;
 
             const response = await fetch("https://api.monday.com/v2", {
                 method: "POST",
@@ -1780,33 +1924,88 @@ export default function App() {
             const json = await response.json().catch(() => ({}));
 
             if (!response.ok || json.errors?.length) {
+                logMondayGraphQLErrors(json, "Solicitări item ids");
                 console.error("[Monday API] Solicitări item ids fetch failed", {
+                    usingNextItemsPage: Boolean(cursor),
+                    cursor,
                     query,
                     response: json,
                 });
 
-                throw new Error(
-                    `Solicitări - item ids: ${json.errors?.[0]?.message || `HTTP ${response.status}`}`
-                );
+                const mondayErrorMessage =
+                    json.errors?.map((e) => e.message).filter(Boolean).join(" | ") ||
+                    `HTTP ${response.status}`;
+
+                if (cursor) {
+                    console.warn(
+                        "[Monday API] Solicitări next_items_page failed. Continuing with partial results.",
+                        {
+                            cursor,
+                            totalSoFar: allIds.length,
+                            error: mondayErrorMessage,
+                            response: json,
+                        }
+                    );
+                    partialMeta = { partial: true, reason: mondayErrorMessage };
+                    break;
+                }
+
+                throw new Error(`Solicitări - item ids: ${mondayErrorMessage}`);
             }
 
-            const page = json.data?.boards?.[0]?.items_page;
+            const page = cursor
+                ? json.data?.next_items_page
+                : json.data?.boards?.[0]?.items_page;
 
             if (!page) {
+                logMondayGraphQLErrors(json, "Solicitări item ids incomplete");
+                if (cursor) {
+                    console.warn(
+                        "[Monday API] Solicitări next_items_page incomplete. Continuing with partial results.",
+                        { totalSoFar: allIds.length, response: json }
+                    );
+                    partialMeta = {
+                        partial: true,
+                        reason: "Răspuns incomplet de la Monday (lipsește next_items_page).",
+                    };
+                    break;
+                }
                 console.error("[Monday API] Solicitări item ids incomplete response", json);
                 throw new Error("Solicitări - item ids: răspuns incomplet de la Monday");
             }
 
             allIds.push(...(page.items || []).map((item) => item.id));
 
-            if (page.cursor) {
-                cursor = page.cursor;
-            } else {
-                hasMore = false;
+            console.log("Solicitări ids page fetched:", {
+                pageCount: page.items?.length || 0,
+                totalSoFar: allIds.length,
+                hasNextCursor: Boolean(page.cursor),
+            });
+
+            pageNumber += 1;
+            if (pageNumber >= MAX_SOLICITARI_PAGES) {
+                console.warn("Solicitări pagination stopped after max pages", {
+                    maxPages: MAX_SOLICITARI_PAGES,
+                    totalSoFar: allIds.length,
+                });
+                partialMeta = {
+                    partial: true,
+                    reason: `Paginare oprită după ${MAX_SOLICITARI_PAGES} pagini (limită de siguranță).`,
+                };
+                break;
             }
+
+            if (!page.cursor) {
+                break;
+            }
+
+            cursor = page.cursor;
         }
 
-        console.log("Solicitări item ids fetched:", allIds.length);
+        console.log("Solicitări item ids fetched total:", allIds.length);
+        if (partialMeta) {
+            return { ids: allIds, ...partialMeta };
+        }
         return allIds;
     };
 
@@ -1858,6 +2057,7 @@ export default function App() {
             const json = await response.json().catch(() => ({}));
 
             if (!response.ok || json.errors?.length) {
+                logMondayGraphQLErrors(json, "Solicitări hydrate by ids");
                 console.error("[Monday API] Solicitări hydrate failed", {
                     ids: chunk,
                     query,
@@ -1877,11 +2077,35 @@ export default function App() {
         return allItems;
     };
 
-    /** Solicitări: id-uri → hidratare cu column_values(ids) → filtrare locală după deal_creation_date. */
+    /** Solicitări: încercare prima pagină filtrată pe server; la eșec, fallback id-uri + hidratare + filtrare locală. */
     const fetchSolicitariFilteredLocally = async (dateFrom, dateTo) => {
         console.log("Solicitări date range:", { dateFrom, dateTo });
 
-        const itemIds = await fetchSolicitariItemIds();
+        try {
+            const firstPageResult = await fetchSolicitariFilteredFirstPage(dateFrom, dateTo);
+            const items = firstPageResult?.items_page?.items || [];
+            console.log("Solicitări using filtered first-page strategy:", items.length);
+            return firstPageResult;
+        } catch (err) {
+            console.warn(
+                "Solicitări filtered first-page strategy failed. Falling back to partial id pagination.",
+                err
+            );
+        }
+
+        const solicitariIdsResult = await fetchSolicitariItemIds();
+        const itemIds = Array.isArray(solicitariIdsResult)
+            ? solicitariIdsResult
+            : solicitariIdsResult.ids;
+        const isPartial =
+            !Array.isArray(solicitariIdsResult) && solicitariIdsResult.partial;
+
+        if (isPartial) {
+            setWarnings((prev) => [
+                ...prev,
+                `Atenție: datele din Solicitări pot fi incomplete. Monday API a oprit paginarea după ${itemIds.length} iteme: ${solicitariIdsResult.reason}`,
+            ]);
+        }
 
         if (!itemIds.length) {
             return {
@@ -1930,53 +2154,63 @@ export default function App() {
         };
     };
 
-    // LIGHTWEIGHT DIRECTORY FETCH
+    // LIGHTWEIGHT DIRECTORY FETCH (paginare: boards.items_page apoi next_items_page)
     const fetchItemsDirectory = async (boardId, ownerColId, rulesString = null) => {
-        let allItems = [];
+        const allItems = [];
         let cursor = null;
-        let hasMore = true;
+        const ownerIdInQuery = escapeGraphQLString(ownerColId);
 
-        while (hasMore) {
-            let args = "";
-            if (cursor) {
-                args = `limit: 500, cursor: "${cursor}"`;
-            } else {
-                args = `limit: 500`;
-                if (rulesString) {
-                    args += `, query_params: { rules: ${rulesString} }`;
-                }
-            }
-            
-            const query = `query {
-                boards (ids: [${boardId}]) {
-                    items_page (${args}) {
+        while (true) {
+            const query = cursor
+                ? `query {
+                    next_items_page(limit: 500, cursor: "${escapeGraphQLString(cursor)}") {
                         cursor
                         items {
                             id
-                            column_values(ids: ["${ownerColId}"]) {
+                            column_values(ids: ["${ownerIdInQuery}"]) {
                                 id
                                 value
                             }
                         }
                     }
-                }
-            }`;
-            
+                }`
+                : `query {
+                    boards (ids: [${boardId}]) {
+                        items_page(limit: 500${
+                            rulesString ? `, query_params: { rules: ${rulesString} }` : ""
+                        }) {
+                            cursor
+                            items {
+                                id
+                                column_values(ids: ["${ownerIdInQuery}"]) {
+                                    id
+                                    value
+                                }
+                            }
+                        }
+                    }
+                }`;
+
             try {
                 const res = await fetch("https://api.monday.com/v2", {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/json', 'Authorization': getMondayApiKey() },
-                     body: JSON.stringify({ query })
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: getMondayApiKey(),
+                    },
+                    body: JSON.stringify({ query }),
                 });
                 const json = await res.json();
-                const data = json.data?.boards?.[0]?.items_page;
-                
-                if (data?.items) allItems.push(...data.items);
-                cursor = data?.cursor;
-                if (!cursor) hasMore = false;
-            } catch(e) {
+                const page = cursor
+                    ? json.data?.next_items_page
+                    : json.data?.boards?.[0]?.items_page;
+
+                if (page?.items) allItems.push(...page.items);
+                if (!page?.cursor) break;
+                cursor = page.cursor;
+            } catch (e) {
                 console.error("Directory fetch error:", e);
-                hasMore = false;
+                break;
             }
         }
         return { items_page: { items: allItems } };
@@ -2052,6 +2286,7 @@ export default function App() {
         setLoading(true);
         setStatusMessage("Se preiau datele din board-uri...");
         setError(null);
+        setWarnings([]);
         setOpsStats([]);
         setSalesStats([]);
         setMgmtStats([]); // Reset management stats
@@ -2117,7 +2352,17 @@ export default function App() {
                 `[{ column_id: "${COLS.COMENZI.DATA_LIVRARE}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
             );
 
-            const solicitari = await fetchSolicitariFilteredLocally(dateFrom, dateTo);
+            let solicitari = { items_page: { items: [] } };
+            try {
+                solicitari = await fetchSolicitariFilteredLocally(dateFrom, dateTo);
+            } catch (err) {
+                console.error("Solicitări failed, continuing report without Solicitări", err);
+                setWarnings((prev) => [
+                    ...prev,
+                    `Nu am putut încărca boardul Solicitări: ${err.message}. Raportul continuă fără aceste date.`,
+                ]);
+                solicitari = { items_page: { items: [] } };
+            }
 
             // Use discovered IDs for Furnizori
             const furnizori = await fetchAllItems(
@@ -2620,7 +2865,21 @@ export default function App() {
                     </div>
                 </div>
 
-                {error && <div className="p-4 bg-red-50 text-red-800 rounded-lg mb-6 flex gap-2"><AlertCircle className="w-5 h-5" /> {error}</div>}
+                {error && <div className="p-4 bg-red-50 text-red-800 rounded-lg mb-6 flex gap-2"><AlertCircle className="w-5 h-5 shrink-0" /> {error}</div>}
+
+                {warnings.length > 0 && (
+                    <div className="space-y-2 mb-6">
+                        {warnings.map((w, i) => (
+                            <div
+                                key={`warning-${i}`}
+                                className="p-4 bg-amber-50 text-amber-900 rounded-lg flex gap-2 border border-amber-200"
+                            >
+                                <AlertCircle className="w-5 h-5 shrink-0 text-amber-600" />
+                                <span className="text-sm leading-relaxed">{w}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
 
                 <div className="space-y-12">
                     {mgmtStats.length > 0 && <div className="animate-fade-in"><ManagementTable data={mgmtStats} dateRange={dateRangeStr} /></div>}
