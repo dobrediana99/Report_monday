@@ -1744,7 +1744,64 @@ export default function App() {
 
         return { items_page: { items: allItems } };
     };
-    
+
+    /** Solicitări: fără query_params pe server (between pe deal_creation_date poate da 500 la Monday). Filtrare locală după interval. */
+    const fetchSolicitariFilteredLocally = async (dateFrom, dateTo) => {
+        const solicitariColumnIds = sanitizeMondayColumnIds([
+            COLS.SOLICITARI.DATA,
+            COLS.SOLICITARI.SURSA,
+            COLS.SOLICITARI.PRINCIPAL,
+            COLS.SOLICITARI.SECUNDAR,
+        ]);
+
+        console.log("Solicitări date range:", { dateFrom, dateTo });
+
+        const response = await fetchAllItems(
+            "Solicitări - fără filtrare server-side",
+            BOARD_ID_SOLICITARI,
+            solicitariColumnIds,
+            null
+        );
+
+        const items = response?.items_page?.items || [];
+        console.log("Solicitări total fetched:", items.length);
+
+        const start = new Date(`${dateFrom}T00:00:00`);
+        const end = new Date(`${dateTo}T23:59:59`);
+
+        const filteredItems = items.filter((item) => {
+            const dateCol = item.column_values?.find((c) => c.id === COLS.SOLICITARI.DATA);
+            if (!dateCol) return false;
+
+            let dateValue = null;
+            try {
+                const parsed = dateCol.value ? JSON.parse(dateCol.value) : null;
+                dateValue = parsed?.date || null;
+            } catch {
+                dateValue = null;
+            }
+
+            if (!dateValue && dateCol.text) {
+                dateValue = dateCol.text;
+            }
+
+            if (!dateValue) return false;
+
+            const itemDate = new Date(`${dateValue}T12:00:00`);
+            if (Number.isNaN(itemDate.getTime())) return false;
+
+            return itemDate >= start && itemDate <= end;
+        });
+
+        console.log("Solicitări filtered:", filteredItems.length);
+
+        return {
+            items_page: {
+                items: filteredItems,
+            },
+        };
+    };
+
     // LIGHTWEIGHT DIRECTORY FETCH
     const fetchItemsDirectory = async (boardId, ownerColId, rulesString = null) => {
         let allItems = [];
@@ -1932,12 +1989,7 @@ export default function App() {
                 `[{ column_id: "${COLS.COMENZI.DATA_LIVRARE}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
             );
 
-            const solicitari = await fetchAllItems(
-                "Solicitări - după data contract",
-                BOARD_ID_SOLICITARI,
-                sanitizeMondayColumnIds(Object.values(COLS.SOLICITARI)),
-                `[{ column_id: "${COLS.SOLICITARI.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
-            );
+            const solicitari = await fetchSolicitariFilteredLocally(dateFrom, dateTo);
 
             // Use discovered IDs for Furnizori
             const furnizori = await fetchAllItems(
