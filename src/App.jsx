@@ -1745,131 +1745,163 @@ export default function App() {
         return { items_page: { items: allItems } };
     };
 
-    /**
-     * Paginare dedicată board Solicitări: fără `column_values(ids: [...])` și fără `... on FormulaValue`.
-     * Pe acest board, combinația items_page + ids + fragment poate returna HTTP 500 de la Monday chiar fără query_params.
-     * Cerem toate column_values (id/text/value/type); filtrarea după coloane rămâne în `getCol` / procesare.
-     */
-    const fetchSolicitariBoardItemsAllPagesPlain = async () => {
-        const label = "Solicitări (items_page, column_values fără ids)";
+    /** Solicitări: doar id-uri din items_page (fără column_values — board cu multe coloane → 500 dacă ceri toate). */
+    const fetchSolicitariItemIds = async () => {
         const authKey = getMondayApiKey();
-        const allItems = [];
+        const allIds = [];
         let cursor = null;
         let hasMore = true;
 
-        const logFailure = (reason, json, query) => {
-            console.error("[Monday API] solicitări plain items_page —", reason, {
-                label,
-                boardId: BOARD_ID_SOLICITARI,
-                query,
-                response: json,
-            });
-        };
-
         while (hasMore) {
             const args = cursor
-                ? `limit: ${MONDAY_ITEMS_PAGE_LIMIT}, cursor: "${String(cursor).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
-                : `limit: ${MONDAY_ITEMS_PAGE_LIMIT}`;
+                ? `limit: 25, cursor: "${String(cursor).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
+                : `limit: 25`;
 
             const query = `query {
-                boards (ids: [${BOARD_ID_SOLICITARI}]) {
-                    items_page (${args}) {
+                boards(ids: [${BOARD_ID_SOLICITARI}]) {
+                    items_page(${args}) {
                         cursor
                         items {
                             id
-                            name
-                            column_values {
-                                id
-                                text
-                                value
-                                type
-                            }
                         }
                     }
                 }
             }`;
 
-            let attempts = 0;
-            let success = false;
-            let json;
+            const response = await fetch("https://api.monday.com/v2", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: authKey,
+                },
+                body: JSON.stringify({ query }),
+            });
 
-            while (attempts < 3 && !success) {
-                try {
-                    const response = await fetch("https://api.monday.com/v2", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            Authorization: authKey,
-                        },
-                        body: JSON.stringify({ query }),
-                    });
+            const json = await response.json().catch(() => ({}));
 
-                    if (!response.ok) {
-                        const text = await response.text().catch(() => "");
-                        throw new Error(
-                            `HTTP ${response.status}${text ? ` — ${text.slice(0, 200)}` : ""}`
-                        );
-                    }
-                    json = await response.json();
-                    success = true;
-                } catch (e) {
-                    attempts++;
-                    console.warn(`[Monday API] încercarea ${attempts}/3 (${label}):`, e);
-                    if (attempts >= 3) {
-                        throw new Error(`${label}: ${e.message || String(e)}`);
-                    }
-                    await new Promise((r) => setTimeout(r, 1000 * attempts));
-                }
-            }
+            if (!response.ok || json.errors?.length) {
+                console.error("[Monday API] Solicitări item ids fetch failed", {
+                    query,
+                    response: json,
+                });
 
-            if (json.errors && json.errors.length) {
-                logFailure("GraphQL errors", json, query);
-                const msg = json.errors[0]?.message || "Monday API error";
-                throw new Error(`${label}: ${msg}`);
-            }
-
-            const itemsPage = json.data?.boards?.[0]?.items_page;
-            if (!itemsPage) {
-                logFailure("lipsește data.boards[0].items_page", json, query);
                 throw new Error(
-                    `${label}: răspuns incomplet (lipsește items_page). Detalii în consolă.`
+                    `Solicitări - item ids: ${json.errors?.[0]?.message || `HTTP ${response.status}`}`
                 );
             }
 
-            const pageItems = Array.isArray(itemsPage.items) ? itemsPage.items : [];
-            allItems.push(...pageItems);
+            const page = json.data?.boards?.[0]?.items_page;
 
-            const nextCursor = itemsPage.cursor;
-            if (!nextCursor) {
-                hasMore = false;
+            if (!page) {
+                console.error("[Monday API] Solicitări item ids incomplete response", json);
+                throw new Error("Solicitări - item ids: răspuns incomplet de la Monday");
+            }
+
+            allIds.push(...(page.items || []).map((item) => item.id));
+
+            if (page.cursor) {
+                cursor = page.cursor;
             } else {
-                cursor = nextCursor;
+                hasMore = false;
             }
         }
 
-        return { items_page: { items: allItems } };
+        console.log("Solicitări item ids fetched:", allIds.length);
+        return allIds;
     };
 
-    /** Solicitări: fără query_params pe server; preluare plain + filtrare locală după deal_creation_date. */
+    /** Solicitări: hidratare prin `items(ids:)` cu column_values DOAR cu ids (chunk-uri mici). */
+    const fetchSolicitariItemsByIds = async (itemIds) => {
+        const authKey = getMondayApiKey();
+
+        const columnIds = sanitizeMondayColumnIds([
+            COLS.SOLICITARI.DATA,
+            COLS.SOLICITARI.SURSA,
+            COLS.SOLICITARI.PRINCIPAL,
+            COLS.SOLICITARI.SECUNDAR,
+        ]);
+
+        if (columnIds.length === 0) {
+            throw new Error(
+                "Solicitări - hydrate by ids: listă goală de column ids după curățare — verifică COLS.SOLICITARI."
+            );
+        }
+
+        const colsString = columnIds.map((id) => `"${id}"`).join(", ");
+        const allItems = [];
+
+        for (let i = 0; i < itemIds.length; i += 10) {
+            const chunk = itemIds.slice(i, i + 10);
+            const idsString = chunk.map((id) => String(id)).join(", ");
+
+            const query = `query {
+                items(ids: [${idsString}]) {
+                    id
+                    name
+                    column_values(ids: [${colsString}]) {
+                        id
+                        text
+                        value
+                    }
+                }
+            }`;
+
+            const response = await fetch("https://api.monday.com/v2", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: authKey,
+                },
+                body: JSON.stringify({ query }),
+            });
+
+            const json = await response.json().catch(() => ({}));
+
+            if (!response.ok || json.errors?.length) {
+                console.error("[Monday API] Solicitări hydrate failed", {
+                    ids: chunk,
+                    query,
+                    response: json,
+                });
+
+                throw new Error(
+                    `Solicitări - hydrate by ids: ${json.errors?.[0]?.message || `HTTP ${response.status}`}`
+                );
+            }
+
+            const chunkItems = (json.data?.items || []).filter(Boolean);
+            allItems.push(...chunkItems);
+        }
+
+        console.log("Solicitări hydrated items:", allItems.length);
+        return allItems;
+    };
+
+    /** Solicitări: id-uri → hidratare cu column_values(ids) → filtrare locală după deal_creation_date. */
     const fetchSolicitariFilteredLocally = async (dateFrom, dateTo) => {
         console.log("Solicitări date range:", { dateFrom, dateTo });
-        console.log(
-            "Solicitări: preluare cu items_page fără column_values(ids) și fără fragment FormulaValue (workaround 500 Monday)."
-        );
 
-        const response = await fetchSolicitariBoardItemsAllPagesPlain();
+        const itemIds = await fetchSolicitariItemIds();
 
-        const items = response?.items_page?.items || [];
-        console.log("Solicitări total fetched:", items.length);
+        if (!itemIds.length) {
+            return {
+                items_page: {
+                    items: [],
+                },
+            };
+        }
+
+        const hydratedItems = await fetchSolicitariItemsByIds(itemIds);
 
         const start = new Date(`${dateFrom}T00:00:00`);
         const end = new Date(`${dateTo}T23:59:59`);
 
-        const filteredItems = items.filter((item) => {
+        const filteredItems = hydratedItems.filter((item) => {
             const dateCol = item.column_values?.find((c) => c.id === COLS.SOLICITARI.DATA);
             if (!dateCol) return false;
 
             let dateValue = null;
+
             try {
                 const parsed = dateCol.value ? JSON.parse(dateCol.value) : null;
                 dateValue = parsed?.date || null;
@@ -1889,7 +1921,7 @@ export default function App() {
             return itemDate >= start && itemDate <= end;
         });
 
-        console.log("Solicitări filtered:", filteredItems.length);
+        console.log("Solicitări filtered items:", filteredItems.length);
 
         return {
             items_page: {
