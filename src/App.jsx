@@ -13,7 +13,50 @@ import {
 } from 'lucide-react';
 
 // --- CONFIGURARE ---
-const API_KEY = "eyJhbGciOiJIUzI1NiJ9.eyJ0aWQiOjU4NzY4OTI3NiwiYWFpIjoxMSwidWlkIjo5NjI4MDI0NiwiaWFkIjoiMjAyNS0xMS0xOFQxMDo0OTozMi4wMDBaIiwicGVyIjoibWU6d3JpdGUiLCJhY3RpZCI6MjgzNzcyNDAsInJnbiI6ImV1YzEifQ.E7W4LqdVv3K1oqtqIoD5MbqJOT4pLn4vWEQhhqoQTJo";
+// Monday: token în `.env` ca VITE_MONDAY_API_KEY (vezi `.env.example`). Repornește Vite după modificare.
+const MONDAY_ITEMS_PAGE_LIMIT = 100;
+
+function getMondayApiKey() {
+    const key = import.meta.env.VITE_MONDAY_API_KEY;
+    if (key == null || String(key).trim() === "") {
+        throw new Error(
+            "Lipsește VITE_MONDAY_API_KEY. Creează `.env` în rădăcina proiectului cu această variabilă (vezi `.env.example`) și repornește serverul de dezvoltare."
+        );
+    }
+    return String(key).trim();
+}
+
+/** Placeholder / fallback din COLS.COMENZI — nu se trimit la API (payload invalid sau coloane inexistente). */
+const SKIP_MONDAY_COLUMN_IDS = new Set([
+    "crt_column_id",
+    "dep_column_id",
+    "implicare_column_id",
+    "client_furnizor_pe_column_id",
+    "mod_transport_column_id",
+    "tip_marfa_column_id",
+    "ocupare_mij_transport_column_id",
+    "crt",
+    "dep",
+    "implicare",
+    "client_furnizor",
+    "mod_transport",
+    "tip_marfa",
+    "ocupare",
+]);
+
+function sanitizeMondayColumnIds(colIdsArray) {
+    const seen = new Set();
+    const out = [];
+    for (const raw of colIdsArray || []) {
+        const id = typeof raw === "string" ? raw.trim() : raw;
+        if (!id || seen.has(id)) continue;
+        if (SKIP_MONDAY_COLUMN_IDS.has(id)) continue;
+        seen.add(id);
+        out.push(id);
+    }
+    return out;
+}
+
 const EXCHANGE_RATE = 5.1; // Curs actualizat 2025
 
 // IDs Board-uri
@@ -1583,23 +1626,45 @@ export default function App() {
         }
     };
 
-    const fetchAllItems = async (boardId, colIdsArray, rulesString = null) => {
-        let allItems = [];
+    const fetchAllItems = async (label, boardId, colIdsArray, rulesString = null) => {
+        const authKey = getMondayApiKey();
+        const colIds = sanitizeMondayColumnIds(colIdsArray);
+
+        if (colIds.length === 0) {
+            console.error("[Monday API] Niciun column id după sanitizare", {
+                label,
+                boardId,
+                colIdsArray,
+                rulesString,
+            });
+            throw new Error(
+                `${label}: listă goală de coloane după curățare — verifică COLS și mapările din board.`
+            );
+        }
+
+        const colsString = colIds.map((c) => `"${c}"`).join(", ");
+
+        const logMondayItemsPageFailure = (reason, json, query) => {
+            console.error("[Monday API] items_page —", reason, {
+                label,
+                boardId,
+                columns: colIds,
+                rulesString,
+                query,
+                response: json,
+            });
+        };
+
+        const allItems = [];
         let cursor = null;
         let hasMore = true;
-        
-        const colsString = colIdsArray.map(c => `"${c}"`).join(", ");
 
         while (hasMore) {
-            let args = "";
-            if (cursor) {
-                args = `limit: 250, cursor: "${cursor}"`;
-            } else {
-                args = `limit: 250`;
-                if (rulesString) {
-                    args += `, query_params: { rules: ${rulesString} }`;
-                }
-            }
+            const args = cursor
+                ? `limit: ${MONDAY_ITEMS_PAGE_LIMIT}, cursor: "${String(cursor).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
+                : `limit: ${MONDAY_ITEMS_PAGE_LIMIT}${
+                      rulesString ? `, query_params: { rules: ${rulesString} }` : ""
+                  }`;
 
             const query = `query {
                 boards (ids: [${boardId}]) {
@@ -1623,40 +1688,61 @@ export default function App() {
             let attempts = 0;
             let success = false;
             let json;
-            
-            while(attempts < 3 && !success) {
+
+            while (attempts < 3 && !success) {
                 try {
                     const response = await fetch("https://api.monday.com/v2", {
-                        method: 'POST',
+                        method: "POST",
                         headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': API_KEY
+                            "Content-Type": "application/json",
+                            Authorization: authKey,
                         },
-                        body: JSON.stringify({ query })
+                        body: JSON.stringify({ query }),
                     });
-                    
-                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                    if (!response.ok) {
+                        const text = await response.text().catch(() => "");
+                        throw new Error(
+                            `HTTP ${response.status}${text ? ` — ${text.slice(0, 200)}` : ""}`
+                        );
+                    }
                     json = await response.json();
                     success = true;
-                } catch(e) {
+                } catch (e) {
                     attempts++;
-                    console.warn(`Attempt ${attempts} failed for board ${boardId}:`, e);
-                    if(attempts >= 3) throw e;
-                    await new Promise(r => setTimeout(r, 1000 * attempts));
+                    console.warn(`[Monday API] încercarea ${attempts}/3 (${label}):`, e);
+                    if (attempts >= 3) {
+                        throw new Error(`${label}: ${e.message || String(e)}`);
+                    }
+                    await new Promise((r) => setTimeout(r, 1000 * attempts));
                 }
             }
 
-            if (json.errors) throw new Error(json.errors[0].message);
-            
-            const data = json.data?.boards?.[0]?.items_page;
-            if (!data) break;
+            if (json.errors && json.errors.length) {
+                logMondayItemsPageFailure("GraphQL errors", json, query);
+                const msg = json.errors[0]?.message || "Monday API error";
+                throw new Error(`${label}: ${msg}`);
+            }
 
-            allItems = [...allItems, ...data.items];
-            cursor = data.cursor;
-            
-            if (!cursor) hasMore = false;
+            const itemsPage = json.data?.boards?.[0]?.items_page;
+            if (!itemsPage) {
+                logMondayItemsPageFailure("lipsește data.boards[0].items_page", json, query);
+                throw new Error(
+                    `${label}: răspuns incomplet de la Monday (lipsește items_page). Detalii în consolă.`
+                );
+            }
+
+            const pageItems = Array.isArray(itemsPage.items) ? itemsPage.items : [];
+            allItems.push(...pageItems);
+
+            const nextCursor = itemsPage.cursor;
+            if (!nextCursor) {
+                hasMore = false;
+            } else {
+                cursor = nextCursor;
+            }
         }
-        
+
         return { items_page: { items: allItems } };
     };
     
@@ -1695,7 +1781,7 @@ export default function App() {
             try {
                 const res = await fetch("https://api.monday.com/v2", {
                      method: 'POST',
-                     headers: { 'Content-Type': 'application/json', 'Authorization': API_KEY },
+                     headers: { 'Content-Type': 'application/json', 'Authorization': getMondayApiKey() },
                      body: JSON.stringify({ query })
                 });
                 const json = await res.json();
@@ -1720,7 +1806,7 @@ export default function App() {
         }`;
         const response = await fetch("https://api.monday.com/v2", {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': API_KEY },
+            headers: { 'Content-Type': 'application/json', 'Authorization': getMondayApiKey() },
             body: JSON.stringify({ query })
         });
         const json = await response.json();
@@ -1756,7 +1842,7 @@ export default function App() {
             try {
                 const response = await fetch("https://api.monday.com/v2", {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': API_KEY },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': getMondayApiKey() },
                     body: JSON.stringify({ query })
                 });
                 const json = await response.json();
@@ -1791,6 +1877,8 @@ export default function App() {
         });
 
         try {
+            getMondayApiKey();
+
             const dateFrom = formatDateISO(start);
             const dateTo = formatDateISO(end);
             
@@ -1829,41 +1917,48 @@ export default function App() {
             // Console log to debug detections
             console.log("Detected Columns:", COLS.COMENZI);
 
+            const comenziColumnIds = sanitizeMondayColumnIds(Object.values(COLS.COMENZI));
 
             const comenziCtr = await fetchAllItems(
+                "Comenzi - după data contract",
                 BOARD_ID_COMENZI,
-                Object.values(COLS.COMENZI),
+                comenziColumnIds,
                 `[{ column_id: "${COLS.COMENZI.DATA_CTR}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
             );
 
             const comenziLivr = await fetchAllItems(
+                "Comenzi - după data livrare",
                 BOARD_ID_COMENZI,
-                Object.values(COLS.COMENZI),
+                comenziColumnIds,
                 `[{ column_id: "${COLS.COMENZI.DATA_LIVRARE}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
             );
 
             const solicitari = await fetchAllItems(
+                "Solicitări - după data contract",
                 BOARD_ID_SOLICITARI,
-                Object.values(COLS.SOLICITARI),
+                sanitizeMondayColumnIds(Object.values(COLS.SOLICITARI)),
                 `[{ column_id: "${COLS.SOLICITARI.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
             );
 
             // Use discovered IDs for Furnizori
             const furnizori = await fetchAllItems(
+                "Furnizori",
                 BOARD_ID_FURNIZORI,
-                [furnDateCol, furnPersonCol],
+                sanitizeMondayColumnIds([furnDateCol, furnPersonCol]),
                 `[{ column_id: "${furnDateCol}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
             );
 
             const leadsContact = await fetchAllItems(
+                "Leads - Contact",
                 BOARD_ID_LEADS,
-                Object.values(COLS.LEADS),
+                sanitizeMondayColumnIds(Object.values(COLS.LEADS)),
                 `[{ column_id: "${COLS.LEADS.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }, { column_id: "${COLS.LEADS.STATUS}", operator: any_of, compare_value: [14] }]`
             );
 
             const leadsQualified = await fetchAllItems(
+                "Leads - Oportunități",
                 BOARD_ID_LEADS,
-                Object.values(COLS.LEADS),
+                sanitizeMondayColumnIds(Object.values(COLS.LEADS)),
                 `[{ column_id: "${COLS.LEADS.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }, { column_id: "${COLS.LEADS.STATUS}", operator: any_of, compare_value: [103] }]`
             );
             
@@ -1901,7 +1996,11 @@ export default function App() {
 
         } catch (err) {
             console.error(err);
-            setError("Eroare la preluarea datelor: " + err.message);
+            setError(
+                err.message?.startsWith("Lipsește VITE_MONDAY_API_KEY")
+                    ? err.message
+                    : "Eroare la preluarea datelor: " + err.message
+            );
         } finally {
             setLoading(false);
             setStatusMessage("");
