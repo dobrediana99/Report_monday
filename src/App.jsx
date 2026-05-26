@@ -14,7 +14,8 @@ import {
 
 // --- CONFIGURARE ---
 // Monday: token în `.env` ca VITE_MONDAY_API_KEY (vezi `.env.example`). Repornește Vite după modificare.
-const MONDAY_ITEMS_PAGE_LIMIT = 100;
+/** Limită maximă per cerere items_page (fără next_items_page — paginarea Monday dă 500). */
+const MONDAY_ITEMS_PAGE_LIMIT = 500;
 
 function getMondayApiKey() {
     const key = import.meta.env.VITE_MONDAY_API_KEY;
@@ -85,9 +86,6 @@ const BOARD_ID_LEADS = 1853156722;
 const BOARD_ID_CONTACTE = 1853156713;
 const BOARD_ID_FURNIZORI = 1907628670; 
 const BOARD_ID_SOLICITARI = 1905911565;
-
-/** Paginare Solicitări: limită de siguranță (items_page + next_items_page). */
-const MAX_SOLICITARI_PAGES = 50;
 
 // Link Google Drive
 const DRIVE_FOLDER_LINK = "https://drive.google.com/drive/folders/1I_sUSjcWBXZr70ns58a8VzK5d0pEM1C6?ths=true";
@@ -194,6 +192,60 @@ const formatDateISO = (date) => {
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
 };
+
+function addDaysISO(isoDate, days) {
+    const d = new Date(`${isoDate}T12:00:00`);
+    d.setDate(d.getDate() + days);
+    return formatDateISO(d);
+}
+
+function daysBetweenISO(fromIso, toIso) {
+    const from = new Date(`${fromIso}T12:00:00`);
+    const to = new Date(`${toIso}T12:00:00`);
+    return Math.round((to.getTime() - from.getTime()) / 86400000);
+}
+
+function buildDateFilterRules(
+    dateColumnId,
+    dateFrom,
+    dateTo,
+    extraRules = null,
+    excludeItemIds = null
+) {
+    const parts = [
+        `{ column_id: "${escapeGraphQLString(dateColumnId)}", operator: between, compare_value: ["${escapeGraphQLString(dateFrom)}", "${escapeGraphQLString(dateTo)}"] }`,
+    ];
+
+    if (excludeItemIds?.length) {
+        const idList = excludeItemIds.map((id) => String(id)).join(", ");
+        parts.push(
+            `{ column_id: "__item_id__", operator: not_any_of, compare_value: [${idList}] }`
+        );
+    }
+
+    if (extraRules) {
+        const trimmed = String(extraRules).trim();
+        if (trimmed.startsWith("[")) {
+            const inner = trimmed.slice(1, -1).trim();
+            if (inner) parts.push(inner);
+        } else {
+            parts.push(trimmed);
+        }
+    }
+
+    return `[${parts.join(", ")}]`;
+}
+
+/** Limită de siguranță pentru paginare prin excludere ID (__item_id__). */
+const MAX_DATE_RANGE_EXCLUSION_ROUNDS = 200;
+
+function dedupeItemsById(items) {
+    const byId = new Map();
+    for (const item of items || []) {
+        if (item?.id != null) byId.set(String(item.id), item);
+    }
+    return [...byId.values()];
+}
 
 const safeVal = (v) => (typeof v === 'number' && !isNaN(v) ? v : 0);
 
@@ -1649,37 +1701,106 @@ export default function App() {
         }
     };
 
-    const fetchAllItems = async (label, boardId, colIdsArray, rulesString = null) => {
+    const mondayPost = async (query, label) => {
         const authKey = getMondayApiKey();
+        let attempts = 0;
+        let lastError;
+
+        while (attempts < 3) {
+            try {
+                const response = await fetch("https://api.monday.com/v2", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: authKey,
+                    },
+                    body: JSON.stringify({ query }),
+                });
+
+                const json = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    throw new Error(
+                        `HTTP ${response.status}${
+                            json.errors?.[0]?.message ? ` — ${json.errors[0].message}` : ""
+                        }`
+                    );
+                }
+
+                if (json.errors?.length) {
+                    logMondayGraphQLErrors(json, label);
+                    const msg =
+                        json.errors.map((e) => e.message).filter(Boolean).join(" | ") ||
+                        "Monday API error";
+                    throw new Error(msg);
+                }
+
+                return json;
+            } catch (e) {
+                lastError = e;
+                attempts++;
+                console.warn(`[Monday API] încercarea ${attempts}/3 (${label}):`, e);
+                if (attempts < 3) {
+                    await new Promise((r) => setTimeout(r, 1000 * attempts));
+                }
+            }
+        }
+
+        throw new Error(`${label}: ${lastError?.message || String(lastError)}`);
+    };
+
+    const fetchItemsPageOnce = async ({
+        label,
+        boardId,
+        colIds,
+        rulesString,
+        itemsFields,
+    }) => {
+        const query = `query {
+            boards (ids: [${boardId}]) {
+                items_page(limit: ${MONDAY_ITEMS_PAGE_LIMIT}${
+                    rulesString ? `, query_params: { rules: ${rulesString} }` : ""
+                }) {
+                    cursor
+                    items {${itemsFields}
+                    }
+                }
+            }
+        }`;
+
+        const json = await mondayPost(query, label);
+        const page = json.data?.boards?.[0]?.items_page;
+
+        if (!page) {
+            console.error("[Monday API] items_page lipsă", { label, boardId, rulesString, json });
+            throw new Error(`${label}: răspuns incomplet de la Monday`);
+        }
+
+        return { items: page.items || [], cursor: page.cursor || null };
+    };
+
+    /**
+     * Încarcă toate itemele dintr-o perioadă împărțind intervalul de date când Monday
+     * returnează cursor (>500 în sub-interval). Evită next_items_page (Internal Server Error).
+     */
+    const fetchAllItemsByDateRange = async ({
+        label,
+        boardId,
+        colIdsArray,
+        dateColumnId,
+        dateFrom,
+        dateTo,
+        extraRules = null,
+    }) => {
         const colIds = sanitizeMondayColumnIds(colIdsArray);
 
         if (colIds.length === 0) {
-            console.error("[Monday API] Niciun column id după sanitizare", {
-                label,
-                boardId,
-                colIdsArray,
-                rulesString,
-            });
             throw new Error(
                 `${label}: listă goală de coloane după curățare — verifică COLS și mapările din board.`
             );
         }
 
         const colsString = colIds.map((c) => `"${c}"`).join(", ");
-
-        const logMondayItemsPageFailure = (reason, json, query, usingNextItemsPage) => {
-            console.error("[Monday API] fetchAllItems failed", {
-                label,
-                boardId,
-                columns: colIds,
-                rulesString,
-                usingNextItemsPage,
-                query,
-                response: json,
-                reason,
-            });
-        };
-
         const itemsFields = `
                             id
                             name
@@ -1691,479 +1812,102 @@ export default function App() {
                                 ... on FormulaValue { display_value }
                             }`;
 
-        const allItems = [];
-        let cursor = null;
-
-        while (true) {
-            const query = cursor
-                ? `query {
-                    next_items_page(limit: ${MONDAY_ITEMS_PAGE_LIMIT}, cursor: "${escapeGraphQLString(cursor)}") {
-                        cursor
-                        items {${itemsFields}
-                        }
-                    }
-                }`
-                : `query {
-                    boards (ids: [${boardId}]) {
-                        items_page(limit: ${MONDAY_ITEMS_PAGE_LIMIT}${
-                            rulesString ? `, query_params: { rules: ${rulesString} }` : ""
-                        }) {
-                            cursor
-                            items {${itemsFields}
-                            }
-                        }
-                    }
-                }`;
-
-            let attempts = 0;
-            let success = false;
-            let json;
-
-            while (attempts < 3 && !success) {
-                try {
-                    const response = await fetch("https://api.monday.com/v2", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            Authorization: authKey,
-                        },
-                        body: JSON.stringify({ query }),
-                    });
-
-                    if (!response.ok) {
-                        const text = await response.text().catch(() => "");
-                        throw new Error(
-                            `HTTP ${response.status}${text ? ` — ${text.slice(0, 200)}` : ""}`
-                        );
-                    }
-                    json = await response.json();
-                    success = true;
-                } catch (e) {
-                    attempts++;
-                    console.warn(`[Monday API] încercarea ${attempts}/3 (${label}):`, e);
-                    if (attempts >= 3) {
-                        throw new Error(`${label}: ${e.message || String(e)}`);
-                    }
-                    await new Promise((r) => setTimeout(r, 1000 * attempts));
-                }
-            }
-
-            if (json.errors && json.errors.length) {
-                logMondayItemsPageFailure(
-                    "GraphQL errors",
-                    json,
-                    query,
-                    Boolean(cursor)
-                );
-                const msg = json.errors.map((e) => e.message).join(" | ") || "Monday API error";
-                throw new Error(`${label}: ${msg}`);
-            }
-
-            const page = cursor
-                ? json.data?.next_items_page
-                : json.data?.boards?.[0]?.items_page;
-
-            if (!page) {
-                logMondayItemsPageFailure(
-                    cursor ? "lipsește next_items_page" : "lipsește boards[0].items_page",
-                    json,
-                    query,
-                    Boolean(cursor)
-                );
-                throw new Error(`${label}: răspuns incomplet de la Monday`);
-            }
-
-            allItems.push(...(page.items || []));
-
-            if (!page.cursor) {
-                break;
-            }
-            cursor = page.cursor;
-        }
-
-        return { items_page: { items: allItems } };
-    };
-
-    /**
-     * Solicitări: prima pagină filtrată pe server după `deal_creation_date` (fără next_items_page).
-     * Dacă există `cursor`, există mai mult de 500 rezultate filtrate — paginarea ulterioară e evitată (500 la Monday).
-     */
-    const fetchSolicitariFilteredFirstPage = async (dateFrom, dateTo) => {
-        const authKey = getMondayApiKey();
-
-        const columnIds = sanitizeMondayColumnIds([
-            COLS.SOLICITARI.DATA,
-            COLS.SOLICITARI.SURSA,
-            COLS.SOLICITARI.PRINCIPAL,
-            COLS.SOLICITARI.SECUNDAR,
-        ]);
-
-        if (columnIds.length === 0) {
-            throw new Error(
-                "Solicitări filtered first page: listă goală de column ids după curățare."
-            );
-        }
-
-        const colsString = columnIds.map((id) => `"${id}"`).join(", ");
-        const df = escapeGraphQLString(dateFrom);
-        const dt = escapeGraphQLString(dateTo);
-        const dataCol = escapeGraphQLString(COLS.SOLICITARI.DATA);
-
-        const query = `query {
-            boards(ids: [${BOARD_ID_SOLICITARI}]) {
-                items_page(
-                    limit: 500,
-                    query_params: {
-                        rules: [
-                            {
-                                column_id: "${dataCol}",
-                                operator: between,
-                                compare_value: ["${df}", "${dt}"]
-                            }
-                        ]
-                    }
-                ) {
-                    cursor
-                    items {
-                        id
-                        name
-                        column_values(ids: [${colsString}]) {
-                            id
-                            text
-                            value
-                        }
-                    }
-                }
-            }
-        }`;
-
-        const response = await fetch("https://api.monday.com/v2", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: authKey,
-            },
-            body: JSON.stringify({ query }),
-        });
-
-        const json = await response.json().catch(() => ({}));
-
-        if (!response.ok || json.errors?.length) {
-            logMondayGraphQLErrors(json, "Solicitări filtered first page");
-            console.warn("[Monday API] Solicitări filtered first page failed", {
-                query,
-                response: json,
+        const fetchPageForRules = (rulesString, rangeLabel) =>
+            fetchItemsPageOnce({
+                label: `${label} [${rangeLabel}]`,
+                boardId,
+                colIds,
+                rulesString,
+                itemsFields,
             });
 
-            throw new Error(
-                json.errors?.map((e) => e.message).filter(Boolean).join(" | ") ||
-                    `HTTP ${response.status}`
+        const fetchRange = async (rangeFrom, rangeTo) => {
+            const rangeLabel = `${rangeFrom} — ${rangeTo}`;
+            const { items, cursor } = await fetchPageForRules(
+                buildDateFilterRules(dateColumnId, rangeFrom, rangeTo, extraRules),
+                rangeLabel
             );
-        }
 
-        const page = json.data?.boards?.[0]?.items_page;
-        const items = page?.items || [];
+            if (!cursor) {
+                return items;
+            }
 
-        console.log("Solicitări filtered first page items:", items.length);
+            if (rangeFrom !== rangeTo) {
+                const daySpan = daysBetweenISO(rangeFrom, rangeTo);
+                if (daySpan > 0) {
+                    const midDate = addDaysISO(rangeFrom, Math.floor(daySpan / 2));
+                    const rightStart = addDaysISO(midDate, 1);
+                    if (rightStart <= rangeTo) {
+                        const [leftItems, rightItems] = await Promise.all([
+                            fetchRange(rangeFrom, midDate),
+                            fetchRange(rightStart, rangeTo),
+                        ]);
+                        return dedupeItemsById([...leftItems, ...rightItems]);
+                    }
+                }
+            }
 
-        if (page?.cursor) {
-            setWarnings((prev) => [
-                ...prev,
-                "Atenție: boardul Solicitări are mai mult de 500 rezultate în intervalul selectat. Raportul include primele 500 rezultate, deoarece paginarea Monday dă Internal Server Error.",
-            ]);
-        }
+            let accumulated = [...items];
+            let exclusionRound = 0;
 
-        return {
-            items_page: {
-                items,
-            },
+            while (true) {
+                const excludeIds = accumulated.map((item) => item.id);
+                const { items: moreItems, cursor: nextCursor } = await fetchPageForRules(
+                    buildDateFilterRules(
+                        dateColumnId,
+                        rangeFrom,
+                        rangeTo,
+                        extraRules,
+                        excludeIds
+                    ),
+                    `${rangeLabel} (exclude ${excludeIds.length})`
+                );
+
+                accumulated = dedupeItemsById([...accumulated, ...moreItems]);
+
+                if (!nextCursor) {
+                    return accumulated;
+                }
+
+                if (moreItems.length === 0) {
+                    setWarnings((prev) => [
+                        ...prev,
+                        `Atenție (${label}): nu s-au putut încărca toate înregistrările pentru ${rangeLabel} (peste ${accumulated.length}, paginare oprită).`,
+                    ]);
+                    return accumulated;
+                }
+
+                exclusionRound++;
+                if (exclusionRound >= MAX_DATE_RANGE_EXCLUSION_ROUNDS) {
+                    setWarnings((prev) => [
+                        ...prev,
+                        `Atenție (${label}): limită de paginare atinsă pentru ${rangeLabel} (${accumulated.length} iteme încărcate).`,
+                    ]);
+                    return accumulated;
+                }
+            }
         };
+
+        const items = await fetchRange(dateFrom, dateTo);
+        console.log(`[Monday API] ${label}: ${items.length} iteme (${dateFrom} — ${dateTo})`);
+
+        return { items_page: { items } };
     };
 
-    /**
-     * Solicitări (fallback): id-uri — `boards.items_page` apoi `next_items_page`.
-     * Return: `number[]` dacă paginarea s-a terminat normal; `{ ids, partial, reason }` dacă s-a oprit parțial.
-     */
-    const fetchSolicitariItemIds = async () => {
-        const authKey = getMondayApiKey();
-        const allIds = [];
-        let cursor = null;
-        let pageNumber = 0;
-        let partialMeta = null;
-
-        while (true) {
-            const query = cursor
-                ? `query {
-                    next_items_page(limit: 10, cursor: "${escapeGraphQLString(cursor)}") {
-                        cursor
-                        items {
-                            id
-                        }
-                    }
-                }`
-                : `query {
-                    boards(ids: [${BOARD_ID_SOLICITARI}]) {
-                        items_page(limit: 10) {
-                            cursor
-                            items {
-                                id
-                            }
-                        }
-                    }
-                }`;
-
-            const response = await fetch("https://api.monday.com/v2", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: authKey,
-                },
-                body: JSON.stringify({ query }),
-            });
-
-            const json = await response.json().catch(() => ({}));
-
-            if (!response.ok || json.errors?.length) {
-                logMondayGraphQLErrors(json, "Solicitări item ids");
-                console.error("[Monday API] Solicitări item ids fetch failed", {
-                    usingNextItemsPage: Boolean(cursor),
-                    cursor,
-                    query,
-                    response: json,
-                });
-
-                const mondayErrorMessage =
-                    json.errors?.map((e) => e.message).filter(Boolean).join(" | ") ||
-                    `HTTP ${response.status}`;
-
-                if (cursor) {
-                    console.warn(
-                        "[Monday API] Solicitări next_items_page failed. Continuing with partial results.",
-                        {
-                            cursor,
-                            totalSoFar: allIds.length,
-                            error: mondayErrorMessage,
-                            response: json,
-                        }
-                    );
-                    partialMeta = { partial: true, reason: mondayErrorMessage };
-                    break;
-                }
-
-                throw new Error(`Solicitări - item ids: ${mondayErrorMessage}`);
-            }
-
-            const page = cursor
-                ? json.data?.next_items_page
-                : json.data?.boards?.[0]?.items_page;
-
-            if (!page) {
-                logMondayGraphQLErrors(json, "Solicitări item ids incomplete");
-                if (cursor) {
-                    console.warn(
-                        "[Monday API] Solicitări next_items_page incomplete. Continuing with partial results.",
-                        { totalSoFar: allIds.length, response: json }
-                    );
-                    partialMeta = {
-                        partial: true,
-                        reason: "Răspuns incomplet de la Monday (lipsește next_items_page).",
-                    };
-                    break;
-                }
-                console.error("[Monday API] Solicitări item ids incomplete response", json);
-                throw new Error("Solicitări - item ids: răspuns incomplet de la Monday");
-            }
-
-            allIds.push(...(page.items || []).map((item) => item.id));
-
-            console.log("Solicitări ids page fetched:", {
-                pageCount: page.items?.length || 0,
-                totalSoFar: allIds.length,
-                hasNextCursor: Boolean(page.cursor),
-            });
-
-            pageNumber += 1;
-            if (pageNumber >= MAX_SOLICITARI_PAGES) {
-                console.warn("Solicitări pagination stopped after max pages", {
-                    maxPages: MAX_SOLICITARI_PAGES,
-                    totalSoFar: allIds.length,
-                });
-                partialMeta = {
-                    partial: true,
-                    reason: `Paginare oprită după ${MAX_SOLICITARI_PAGES} pagini (limită de siguranță).`,
-                };
-                break;
-            }
-
-            if (!page.cursor) {
-                break;
-            }
-
-            cursor = page.cursor;
-        }
-
-        console.log("Solicitări item ids fetched total:", allIds.length);
-        if (partialMeta) {
-            return { ids: allIds, ...partialMeta };
-        }
-        return allIds;
-    };
-
-    /** Solicitări: hidratare prin `items(ids:)` cu column_values DOAR cu ids (chunk-uri mici). */
-    const fetchSolicitariItemsByIds = async (itemIds) => {
-        const authKey = getMondayApiKey();
-
-        const columnIds = sanitizeMondayColumnIds([
-            COLS.SOLICITARI.DATA,
-            COLS.SOLICITARI.SURSA,
-            COLS.SOLICITARI.PRINCIPAL,
-            COLS.SOLICITARI.SECUNDAR,
-        ]);
-
-        if (columnIds.length === 0) {
-            throw new Error(
-                "Solicitări - hydrate by ids: listă goală de column ids după curățare — verifică COLS.SOLICITARI."
-            );
-        }
-
-        const colsString = columnIds.map((id) => `"${id}"`).join(", ");
-        const allItems = [];
-
-        for (let i = 0; i < itemIds.length; i += 10) {
-            const chunk = itemIds.slice(i, i + 10);
-            const idsString = chunk.map((id) => String(id)).join(", ");
-
-            const query = `query {
-                items(ids: [${idsString}]) {
-                    id
-                    name
-                    column_values(ids: [${colsString}]) {
-                        id
-                        text
-                        value
-                    }
-                }
-            }`;
-
-            const response = await fetch("https://api.monday.com/v2", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: authKey,
-                },
-                body: JSON.stringify({ query }),
-            });
-
-            const json = await response.json().catch(() => ({}));
-
-            if (!response.ok || json.errors?.length) {
-                logMondayGraphQLErrors(json, "Solicitări hydrate by ids");
-                console.error("[Monday API] Solicitări hydrate failed", {
-                    ids: chunk,
-                    query,
-                    response: json,
-                });
-
-                throw new Error(
-                    `Solicitări - hydrate by ids: ${json.errors?.[0]?.message || `HTTP ${response.status}`}`
-                );
-            }
-
-            const chunkItems = (json.data?.items || []).filter(Boolean);
-            allItems.push(...chunkItems);
-        }
-
-        console.log("Solicitări hydrated items:", allItems.length);
-        return allItems;
-    };
-
-    /** Solicitări: încercare prima pagină filtrată pe server; la eșec, fallback id-uri + hidratare + filtrare locală. */
-    const fetchSolicitariFilteredLocally = async (dateFrom, dateTo) => {
-        console.log("Solicitări date range:", { dateFrom, dateTo });
-
-        try {
-            const firstPageResult = await fetchSolicitariFilteredFirstPage(dateFrom, dateTo);
-            const items = firstPageResult?.items_page?.items || [];
-            console.log("Solicitări using filtered first-page strategy:", items.length);
-            return firstPageResult;
-        } catch (err) {
-            console.warn(
-                "Solicitări filtered first-page strategy failed. Falling back to partial id pagination.",
-                err
-            );
-        }
-
-        const solicitariIdsResult = await fetchSolicitariItemIds();
-        const itemIds = Array.isArray(solicitariIdsResult)
-            ? solicitariIdsResult
-            : solicitariIdsResult.ids;
-        const isPartial =
-            !Array.isArray(solicitariIdsResult) && solicitariIdsResult.partial;
-
-        if (isPartial) {
-            setWarnings((prev) => [
-                ...prev,
-                `Atenție: datele din Solicitări pot fi incomplete. Monday API a oprit paginarea după ${itemIds.length} iteme: ${solicitariIdsResult.reason}`,
-            ]);
-        }
-
-        if (!itemIds.length) {
-            return {
-                items_page: {
-                    items: [],
-                },
-            };
-        }
-
-        const hydratedItems = await fetchSolicitariItemsByIds(itemIds);
-
-        const start = new Date(`${dateFrom}T00:00:00`);
-        const end = new Date(`${dateTo}T23:59:59`);
-
-        const filteredItems = hydratedItems.filter((item) => {
-            const dateCol = item.column_values?.find((c) => c.id === COLS.SOLICITARI.DATA);
-            if (!dateCol) return false;
-
-            let dateValue = null;
-
-            try {
-                const parsed = dateCol.value ? JSON.parse(dateCol.value) : null;
-                dateValue = parsed?.date || null;
-            } catch {
-                dateValue = null;
-            }
-
-            if (!dateValue && dateCol.text) {
-                dateValue = dateCol.text;
-            }
-
-            if (!dateValue) return false;
-
-            const itemDate = new Date(`${dateValue}T12:00:00`);
-            if (Number.isNaN(itemDate.getTime())) return false;
-
-            return itemDate >= start && itemDate <= end;
-        });
-
-        console.log("Solicitări filtered items:", filteredItems.length);
-
-        return {
-            items_page: {
-                items: filteredItems,
-            },
-        };
-    };
-
-    // LIGHTWEIGHT DIRECTORY FETCH (paginare: boards.items_page apoi next_items_page)
-    const fetchItemsDirectory = async (boardId, ownerColId, rulesString = null) => {
-        const allItems = [];
-        let cursor = null;
+    const fetchItemsDirectoryByDateRange = async (
+        boardId,
+        ownerColId,
+        dateColumnId,
+        dateFrom,
+        dateTo
+    ) => {
         const ownerIdInQuery = escapeGraphQLString(ownerColId);
+        const label = `Directory board ${boardId}`;
 
-        while (true) {
-            const query = cursor
-                ? `query {
-                    next_items_page(limit: 500, cursor: "${escapeGraphQLString(cursor)}") {
+        const fetchDirectoryPage = async (rulesString, rangeLabel) => {
+            const query = `query {
+                boards (ids: [${boardId}]) {
+                    items_page(limit: ${MONDAY_ITEMS_PAGE_LIMIT}, query_params: { rules: ${rulesString} }) {
                         cursor
                         items {
                             id
@@ -2173,47 +1917,78 @@ export default function App() {
                             }
                         }
                     }
-                }`
-                : `query {
-                    boards (ids: [${boardId}]) {
-                        items_page(limit: 500${
-                            rulesString ? `, query_params: { rules: ${rulesString} }` : ""
-                        }) {
-                            cursor
-                            items {
-                                id
-                                column_values(ids: ["${ownerIdInQuery}"]) {
-                                    id
-                                    value
-                                }
-                            }
-                        }
+                }
+            }`;
+            const json = await mondayPost(query, `${label} [${rangeLabel}]`);
+            const page = json.data?.boards?.[0]?.items_page;
+            return { items: page?.items || [], cursor: page?.cursor || null };
+        };
+
+        const fetchRange = async (rangeFrom, rangeTo) => {
+            const rangeLabel = `${rangeFrom} — ${rangeTo}`;
+            const { items, cursor } = await fetchDirectoryPage(
+                buildDateFilterRules(dateColumnId, rangeFrom, rangeTo),
+                rangeLabel
+            );
+
+            if (!cursor) return items;
+
+            if (rangeFrom !== rangeTo) {
+                const daySpan = daysBetweenISO(rangeFrom, rangeTo);
+                if (daySpan > 0) {
+                    const midDate = addDaysISO(rangeFrom, Math.floor(daySpan / 2));
+                    const rightStart = addDaysISO(midDate, 1);
+                    if (rightStart <= rangeTo) {
+                        const [leftItems, rightItems] = await Promise.all([
+                            fetchRange(rangeFrom, midDate),
+                            fetchRange(rightStart, rangeTo),
+                        ]);
+                        return dedupeItemsById([...leftItems, ...rightItems]);
                     }
-                }`;
-
-            try {
-                const res = await fetch("https://api.monday.com/v2", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: getMondayApiKey(),
-                    },
-                    body: JSON.stringify({ query }),
-                });
-                const json = await res.json();
-                const page = cursor
-                    ? json.data?.next_items_page
-                    : json.data?.boards?.[0]?.items_page;
-
-                if (page?.items) allItems.push(...page.items);
-                if (!page?.cursor) break;
-                cursor = page.cursor;
-            } catch (e) {
-                console.error("Directory fetch error:", e);
-                break;
+                }
             }
-        }
-        return { items_page: { items: allItems } };
+
+            let accumulated = [...items];
+            let exclusionRound = 0;
+
+            while (true) {
+                const excludeIds = accumulated.map((item) => item.id);
+                const { items: moreItems, cursor: nextCursor } = await fetchDirectoryPage(
+                    buildDateFilterRules(
+                        dateColumnId,
+                        rangeFrom,
+                        rangeTo,
+                        null,
+                        excludeIds
+                    ),
+                    `${rangeLabel} (exclude ${excludeIds.length})`
+                );
+
+                accumulated = dedupeItemsById([...accumulated, ...moreItems]);
+
+                if (!nextCursor) return accumulated;
+
+                if (moreItems.length === 0) {
+                    setWarnings((prev) => [
+                        ...prev,
+                        `Atenție (${label}): activități incomplete pentru ${rangeLabel}.`,
+                    ]);
+                    return accumulated;
+                }
+
+                exclusionRound++;
+                if (exclusionRound >= MAX_DATE_RANGE_EXCLUSION_ROUNDS) {
+                    setWarnings((prev) => [
+                        ...prev,
+                        `Atenție (${label}): limită paginare activități pentru ${rangeLabel}.`,
+                    ]);
+                    return accumulated;
+                }
+            }
+        };
+
+        const items = await fetchRange(dateFrom, dateTo);
+        return { items_page: { items } };
     };
     
     const fetchColumns = async (boardId) => {
@@ -2338,23 +2113,39 @@ export default function App() {
 
             const comenziColumnIds = sanitizeMondayColumnIds(Object.values(COLS.COMENZI));
 
-            const comenziCtr = await fetchAllItems(
-                "Comenzi - după data contract",
-                BOARD_ID_COMENZI,
-                comenziColumnIds,
-                `[{ column_id: "${COLS.COMENZI.DATA_CTR}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
-            );
+            const comenziCtr = await fetchAllItemsByDateRange({
+                label: "Comenzi - după data contract",
+                boardId: BOARD_ID_COMENZI,
+                colIdsArray: comenziColumnIds,
+                dateColumnId: COLS.COMENZI.DATA_CTR,
+                dateFrom,
+                dateTo,
+            });
 
-            const comenziLivr = await fetchAllItems(
-                "Comenzi - după data livrare",
-                BOARD_ID_COMENZI,
-                comenziColumnIds,
-                `[{ column_id: "${COLS.COMENZI.DATA_LIVRARE}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
-            );
+            const comenziLivr = await fetchAllItemsByDateRange({
+                label: "Comenzi - după data livrare",
+                boardId: BOARD_ID_COMENZI,
+                colIdsArray: comenziColumnIds,
+                dateColumnId: COLS.COMENZI.DATA_LIVRARE,
+                dateFrom,
+                dateTo,
+            });
 
             let solicitari = { items_page: { items: [] } };
             try {
-                solicitari = await fetchSolicitariFilteredLocally(dateFrom, dateTo);
+                solicitari = await fetchAllItemsByDateRange({
+                    label: "Solicitări",
+                    boardId: BOARD_ID_SOLICITARI,
+                    colIdsArray: sanitizeMondayColumnIds([
+                        COLS.SOLICITARI.DATA,
+                        COLS.SOLICITARI.SURSA,
+                        COLS.SOLICITARI.PRINCIPAL,
+                        COLS.SOLICITARI.SECUNDAR,
+                    ]),
+                    dateColumnId: COLS.SOLICITARI.DATA,
+                    dateFrom,
+                    dateTo,
+                });
             } catch (err) {
                 console.error("Solicitări failed, continuing report without Solicitări", err);
                 setWarnings((prev) => [
@@ -2364,42 +2155,53 @@ export default function App() {
                 solicitari = { items_page: { items: [] } };
             }
 
-            // Use discovered IDs for Furnizori
-            const furnizori = await fetchAllItems(
-                "Furnizori",
-                BOARD_ID_FURNIZORI,
-                sanitizeMondayColumnIds([furnDateCol, furnPersonCol]),
-                `[{ column_id: "${furnDateCol}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
-            );
+            const furnizori = await fetchAllItemsByDateRange({
+                label: "Furnizori",
+                boardId: BOARD_ID_FURNIZORI,
+                colIdsArray: sanitizeMondayColumnIds([furnDateCol, furnPersonCol]),
+                dateColumnId: furnDateCol,
+                dateFrom,
+                dateTo,
+            });
 
-            const leadsContact = await fetchAllItems(
-                "Leads - Contact",
-                BOARD_ID_LEADS,
-                sanitizeMondayColumnIds(Object.values(COLS.LEADS)),
-                `[{ column_id: "${COLS.LEADS.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }, { column_id: "${COLS.LEADS.STATUS}", operator: any_of, compare_value: [14] }]`
-            );
+            const leadsContact = await fetchAllItemsByDateRange({
+                label: "Leads - Contact",
+                boardId: BOARD_ID_LEADS,
+                colIdsArray: sanitizeMondayColumnIds(Object.values(COLS.LEADS)),
+                dateColumnId: COLS.LEADS.DATA,
+                dateFrom,
+                dateTo,
+                extraRules: `{ column_id: "${COLS.LEADS.STATUS}", operator: any_of, compare_value: [14] }`,
+            });
 
-            const leadsQualified = await fetchAllItems(
-                "Leads - Oportunități",
-                BOARD_ID_LEADS,
-                sanitizeMondayColumnIds(Object.values(COLS.LEADS)),
-                `[{ column_id: "${COLS.LEADS.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }, { column_id: "${COLS.LEADS.STATUS}", operator: any_of, compare_value: [103] }]`
-            );
+            const leadsQualified = await fetchAllItemsByDateRange({
+                label: "Leads - Oportunități",
+                boardId: BOARD_ID_LEADS,
+                colIdsArray: sanitizeMondayColumnIds(Object.values(COLS.LEADS)),
+                dateColumnId: COLS.LEADS.DATA,
+                dateFrom,
+                dateTo,
+                extraRules: `{ column_id: "${COLS.LEADS.STATUS}", operator: any_of, compare_value: [103] }`,
+            });
             
             // --- OPTIMIZED ACTIVITIES FETCH VIA CLIENT-SIDE FILTER ---
             setStatusMessage("Se scanează itemii pentru activități (Filtrare Client-Side)...");
             
             // 1. Fetch Lightweight Directories - FILTERED BY DATE ON SERVER
-            const rawLeads = await fetchItemsDirectory(
-                BOARD_ID_LEADS, 
+            const rawLeads = await fetchItemsDirectoryByDateRange(
+                BOARD_ID_LEADS,
                 COLS.LEADS.OWNER,
-                `[{ column_id: "${COLS.LEADS.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
+                COLS.LEADS.DATA,
+                dateFrom,
+                dateTo
             );
-            
-            const rawContacts = await fetchItemsDirectory(
-                BOARD_ID_CONTACTE, 
+
+            const rawContacts = await fetchItemsDirectoryByDateRange(
+                BOARD_ID_CONTACTE,
                 contactOwnerCol,
-                `[{ column_id: "${COLS.CONTACTE.DATA}", operator: between, compare_value: ["${dateFrom}", "${dateTo}"] }]`
+                COLS.CONTACTE.DATA,
+                dateFrom,
+                dateTo
             );
 
             // 2. Filter Client-Side (Double check for Owner)
